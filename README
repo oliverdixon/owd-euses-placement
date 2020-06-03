@@ -1,0 +1,28 @@
+`ash-euses` ("the Program") is a rewrite of the  classic  Gentoo  Linux  utility
+`euses`, originally authored by Jeroen Roovers [1, 2], as an attempt to  rectify
+some of the issues presented by modern Gentoo systems to the  original  utility.
+The Program is still unstable and in an alpha state, however due to its relative
+simplicity, should become usable shortly, with a featureset comparable  to  that
+of Roovers' tool.
+
+The Program requires the standard C library to build, and has only  been  tested
+on glibc, however should work on any compliant implementation.  It  is  written,
+in its entirety, in C99, to  work  exclusively  on  Gentoo  Linux  systems.   It
+supports the modern `location` attribute notation, set in the various repos.conf
+files [3], and is capable of traversing an arbitrary number  of  *.{,local.}desc
+files in a similarly arbitrary number of repositories.  The existence of a valid
+PORTDIR (obsolete) or `repos.conf/gentoo.conf` is  a  hard  requirement  of  the
+Program, as defined at [4].
+
+I welcome any contributions or enquiries, which can be directed in plain-text to
+ash@suugaku.co.uk.  The Program and all of its components are released under the
+WTF Public License, aside from where  stated  otherwise  (the  standard  library
+headers).  The entire licence can be viewed at [5] or in the  Program's  LICENCE
+file.
+
+[1] https://rooversj.home.xs4all.nl/gentoo/
+[2] https://packages.gentoo.org/packages/app-portage/euses
+[3] https://wiki.gentoo.org/wiki//etc/portage/repos.conf
+[4] https://wiki.gentoo.org/wiki/Mirrorselect
+[5] http://www.wtfpl.net/txt/copying/
+
