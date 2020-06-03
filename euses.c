@@ -17,13 +17,37 @@ struct desc_t {
         struct repo_t parent;
 };
 
+enum status_t {
+        STATUS_OK     =  0, /* everything is OK */
+        STATUS_ERRNO  = -1, /* use perror or strerror on errno */
+        STATUS_NOREPO = -2, /* no repository-description files were found */
+        STATUS_NOGENR = -3  /* no gentoo.conf repository-description file */
+};
+
+/* provide_error: returns a human-readable string representing an error code, as
+ * enumerated in status_t. If the passed code is STATUS_ERRNO, the strerror
+ * function is used with the current value of errno. */
+
+const char * provide_error ( enum status_t status )
+{
+        switch ( status ) {
+                case STATUS_OK:     return "Everything is TTY.";
+                case STATUS_ERRNO:  return strerror ( errno );
+                case STATUS_NOREPO: return "No repository-description " \
+                                                "files were found.";
+                case STATUS_NOGENR: return "gentoo.conf does not exist.";
+
+                default: return "Unknown error.";
+        }
+}
+
 /* get_base_dir: populates `base` with the Portage configuration root (usually
  * CONFIGROOT_DEFAULT) prepended to the CONFIGROOT_SUFFIX. On returning zero,
  * `base` contains the base directory of the various repository-description
  * files. If -1 is returned, the base path would exceed the limit defined by
  * PATH_MAX; errno is set appropriately. */
 
-int get_base_dir ( char base [ PATH_MAX ] )
+enum status_t get_base_dir ( char base [ PATH_MAX ] )
 {
         char * base_ptr = NULL;
 
@@ -32,73 +56,105 @@ int get_base_dir ( char base [ PATH_MAX ] )
 
         if ( strlen ( base ) + strlen ( CONFIGROOT_SUFFIX ) >= PATH_MAX ) {
                 errno = ENAMETOOLONG;
-                return -1;
+                return STATUS_ERRNO;
         }
 
         strcat ( base, CONFIGROOT_SUFFIX );
-        return 0;
+        return STATUS_OK;
 }
 
 /* register_repo: allocates memory for a repository, initialises it with empty
  * values and its location on the filesystem, and adds it to the stack. If the
  * physical location exceeds the length allowed by PATH_MAX, or malloc cannot
- * allocate enough memory, errno is set appropriately and -1 is returned. On
- * success, zero is returned. */
+ * allocate enough memory, errno is set appropriately and STATUS_ERRNO is
+ * returned. On success, STATUS_OK is returned. */
 
-int register_repo ( char base [ ], char * filename,
+enum status_t register_repo ( char base [ ], char * filename,
                 struct repo_stack_t * stack )
 {
         struct repo_t * repo = malloc ( sizeof ( struct repo_t ) );
+        unsigned int len = 0;
 
         if ( repo == NULL )
-                return -1;
+                return STATUS_ERRNO;
 
-        if ( strlen ( filename ) + strlen ( base ) >= PATH_MAX ) {
+        if ( ( len = strlen ( filename ) + strlen ( base ) ) >= PATH_MAX ) {
                 errno = ENAMETOOLONG;
-                return -1;
+                return STATUS_ERRNO;
         }
 
         strcpy ( repo->location, base );
         strcat ( repo->location, filename );
+        repo->location [ len ] = '\0';
         repo->next = NULL;
         repo->ptr = NULL;
 
         stack_push ( stack, repo );
-        return 0;
+        return STATUS_OK;
 }
 
-/* enumerate_repo_descriptions: prints the regular files (repository
- * configuration files) contained within `base`. On success, this function
- * returns zero, otherwise -1, in which case errno is set appropriately. */
+/* enumerate_repo_descriptions: adds the regular files (repository configuration
+ * files) contained within `base` to the given. On success, this function
+ * returns STATUS_OK, otherwise STATUS_ERRNO, in which case errno is set
+ * appropriately. The file `gentoo.conf` must exist within the base directory;
+ * if this is not the case, STATUS_NOGENR is returned.
+ *
+ * https://wiki.gentoo.org/wiki//etc/portage/repos.conf#Format */
 
-int enumerate_repo_descriptions ( char base [ ] ) 
+enum status_t enumerate_repo_descriptions ( char base [ ],
+                struct repo_stack_t * stack )
 {
         DIR * dp = NULL;
         struct dirent * dir = NULL;
+        int gentoo_hit = 0; /* special case: base/gentoo.conf must exist */
+        enum status_t status = STATUS_OK;
 
         if ( ( dp = opendir ( base ) ) == NULL )
-                return -1;
+                return STATUS_ERRNO;
 
         while ( ( dir = readdir ( dp ) ) != NULL )
-                if ( dir->d_type == DT_REG )
-                        puts ( dir->d_name );
+                if ( dir->d_type == DT_REG ) {
+                        if ( !gentoo_hit && strcmp ( "gentoo.conf",
+                                                dir->d_name ) == 0 )
+                                gentoo_hit = 1;
+
+                        if ( ( status = register_repo ( base, dir->d_name,
+                                                        stack ) )
+                                        != STATUS_OK ) {
+                                closedir ( dp );
+                                return status;
+                        }
+                }
 
         closedir ( dp );
-        return 0;
+        return ( gentoo_hit ) ? STATUS_OK : STATUS_NOGENR;
 }
+
+/* int parse_repo_descriptions ( struct repo_stack * stack )
+{
+        struct repo_t * repo = stack_peek ( stack );
+} */
 
 int main ( )
 {
         char base [ PATH_MAX ];
+        struct repo_stack_t repo_stack;
+        enum status_t status = STATUS_OK;
 
-        if ( get_base_dir ( base ) == -1 ||
-                        enumerate_repo_descriptions ( base ) == -1 ) {
-                perror ( "Could not use the repository-description base " \
-                                "directory" );
-                fputs ( "Euses cannot continue. Quitting.\n", stderr );
+        stack_init ( &repo_stack );
+
+        if ( ( status = get_base_dir ( base ) != STATUS_OK ) ||
+                        ( status = enumerate_repo_descriptions ( base,
+                                &repo_stack ) ) != STATUS_OK ) {
+                fputs ( "Could not use the repository-description base " \
+                                "directory: ", stderr );
+                fputs ( provide_error ( status ), stderr );
+                fputc ( '\n', stderr );
+                stack_cleanse ( &repo_stack );
                 return EXIT_FAILURE;
         }
 
+        stack_cleanse ( &repo_stack );
         return EXIT_SUCCESS;
 }
 
