@@ -1,20 +1,20 @@
-/* ash-euses
+/* ash-euses: main driver
  * Ashley Dixon. */
 
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
 #include <dirent.h>
-#include <stdio.h>
-#include <linux/limits.h>
 
-#define BUFFER_SZ ( 4096 )
+#include "euses.h"
+
 #define CONFIGROOT_ENVNAME "PORTAGE_CONFIGROOT"
 #define CONFIGROOT_SUFFIX  "/repos.conf/"
 #define CONFIGROOT_DEFAULT "/etc/portage"
 
-struct repo_t {
-        char location [ PATH_MAX ], buffer [ BUFFER_SZ ];
+struct desc_t {
+        char location [ PATH_MAX ];
+        struct repo_t parent;
 };
 
 /* get_base_dir: populates `base` with the Portage configuration root (usually
@@ -36,6 +36,34 @@ int get_base_dir ( char base [ PATH_MAX ] )
         }
 
         strcat ( base, CONFIGROOT_SUFFIX );
+        return 0;
+}
+
+/* register_repo: allocates memory for a repository, initialises it with empty
+ * values and its location on the filesystem, and adds it to the stack. If the
+ * physical location exceeds the length allowed by PATH_MAX, or malloc cannot
+ * allocate enough memory, errno is set appropriately and -1 is returned. On
+ * success, zero is returned. */
+
+int register_repo ( char base [ ], char * filename,
+                struct repo_stack_t * stack )
+{
+        struct repo_t * repo = malloc ( sizeof ( struct repo_t ) );
+
+        if ( repo == NULL )
+                return -1;
+
+        if ( strlen ( filename ) + strlen ( base ) >= PATH_MAX ) {
+                errno = ENAMETOOLONG;
+                return -1;
+        }
+
+        strcpy ( repo->location, base );
+        strcat ( repo->location, filename );
+        repo->next = NULL;
+        repo->ptr = NULL;
+
+        stack_push ( stack, repo );
         return 0;
 }
 
