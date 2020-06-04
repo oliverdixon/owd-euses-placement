@@ -3,11 +3,13 @@
 
 #include <stdlib.h>
 #include <errno.h>
+#include <stdio.h>
 #include <string.h>
 #include <dirent.h>
 
 #include "euses.h"
 
+#define BUFFER_SZ ( 4096 )
 #define CONFIGROOT_ENVNAME "PORTAGE_CONFIGROOT"
 #define CONFIGROOT_SUFFIX  "/repos.conf/"
 #define CONFIGROOT_DEFAULT "/etc/portage"
@@ -19,9 +21,10 @@ struct desc_t {
 
 enum status_t {
         STATUS_OK     =  0, /* everything is OK */
-        STATUS_ERRNO  = -1, /* use perror or strerror on errno */
+        STATUS_ERRNO  = -1, /* c.f. perror or strerror on errno */
         STATUS_NOREPO = -2, /* no repository-description files were found */
-        STATUS_NOGENR = -3  /* no gentoo.conf repository-description file */
+        STATUS_NOGENR = -3, /* no gentoo.conf repository-description file */
+        STATUS_DCLONG = -4  /* the description file is unusually long */
 };
 
 /* provide_error: returns a human-readable string representing an error code, as
@@ -31,13 +34,15 @@ enum status_t {
 const char * provide_error ( enum status_t status )
 {
         switch ( status ) {
-                case STATUS_OK:     return "Everything is TTY.";
+                case STATUS_OK:     return "Everything is OK.";
                 case STATUS_ERRNO:  return strerror ( errno );
-                case STATUS_NOREPO: return "No repository-description " \
-                                                "files were found.";
+                case STATUS_NOREPO: return "No repository-description files " \
+                                        "were found.";
                 case STATUS_NOGENR: return "gentoo.conf does not exist.";
+                case STATUS_DCLONG: return "A repository-description file " \
+                                        "is unusually voluminous.";
 
-                default: return "Unknown error.";
+                default: return "Unknown error";
         }
 }
 
@@ -63,8 +68,51 @@ enum status_t get_base_dir ( char base [ PATH_MAX ] )
         return STATUS_OK;
 }
 
+/* parse_repo_description: parse the repository-description file, attaining the
+ * base location and the name, populating the given struct accordingly. If the
+ * repository-description file exceeds the generous amount as provided by the
+ * buffer, STATUS_DCLONG is returned. */
+
+enum status_t parse_repo_description ( struct repo_t * repo,
+                char desc_path [ ] )
+{
+        FILE * fp = fopen ( desc_path, "r" );
+        char buffer [ BUFFER_SZ ];
+        long f_len = 0;
+        size_t bytes_read = 0;
+
+        if ( fp == NULL )
+                return STATUS_ERRNO;
+
+        if ( fseek ( fp, 0, SEEK_END ) == -1 ||
+                        ( f_len = ftell ( fp ) ) == -1 ) {
+                fclose ( fp );
+                return STATUS_ERRNO;
+        }
+
+        rewind ( fp );
+        if ( f_len >= BUFFER_SZ ) {
+                fclose ( fp );
+                return STATUS_DCLONG;
+        }
+
+        if ( ( bytes_read = fread ( buffer, sizeof ( char ), BUFFER_SZ - 1,
+                                        fp ) ) < BUFFER_SZ - 1
+                        && !feof ( fp ) ) {
+                fclose ( fp );
+                return STATUS_ERRNO;
+        }
+
+        fclose ( fp );
+        buffer [ bytes_read ] = '\0';
+        puts ( desc_path );
+        puts ( buffer );
+
+        return STATUS_OK;
+}
+
 /* register_repo: allocates memory for a repository, initialises it with empty
- * values and its location on the filesystem, and adds it to the stack. If the
+ * values its location on the filesystem, and adds it to the stack. If the
  * physical location exceeds the length allowed by PATH_MAX, or malloc cannot
  * allocate enough memory, errno is set appropriately and STATUS_ERRNO is
  * returned. On success, STATUS_OK is returned. */
@@ -74,6 +122,8 @@ enum status_t register_repo ( char base [ ], char * filename,
 {
         struct repo_t * repo = malloc ( sizeof ( struct repo_t ) );
         unsigned int len = 0;
+        enum status_t status = STATUS_OK;
+        char desc_path [ PATH_MAX ];
 
         if ( repo == NULL )
                 return STATUS_ERRNO;
@@ -83,11 +133,15 @@ enum status_t register_repo ( char base [ ], char * filename,
                 return STATUS_ERRNO;
         }
 
-        strcpy ( repo->location, base );
-        strcat ( repo->location, filename );
-        repo->location [ len ] = '\0';
+        strcpy ( desc_path, base );
+        strcat ( desc_path, filename );
+        desc_path [ len ] = '\0';
+
+        if ( ( status = parse_repo_description ( repo, desc_path ) )
+                        != STATUS_OK )
+                return status;
+
         repo->next = NULL;
-        repo->ptr = NULL;
 
         stack_push ( stack, repo );
         return STATUS_OK;
@@ -130,21 +184,6 @@ enum status_t enumerate_repo_descriptions ( char base [ ],
         return ( gentoo_hit ) ? STATUS_OK : STATUS_NOGENR;
 }
 
-/* parse_repo_descriptions: I'm not sure what the function should do yet. I want
- * to avoid having loads of passes on the single struct, and I don't
- * particularly like accessing the next pointer manually either. */
-
-void parse_repo_descriptions ( struct repo_stack_t * stack )
-{
-        struct repo_t * repo = stack_peek ( stack );
-
-        do {
-                /* Make the safe assumption that there exist at least one
-                 * repository-description file on the stack. */
-                puts ( repo->location );
-        } while ( ( repo = repo->next ) != NULL );
-}
-
 int main ( )
 {
         char base [ PATH_MAX ];
@@ -157,14 +196,13 @@ int main ( )
                         ( status = enumerate_repo_descriptions ( base,
                                 &repo_stack ) ) != STATUS_OK ) {
                 fputs ( "Could not use the repository-description base " \
-                                "directory: ", stderr );
+                                "directory:\n\t", stderr );
                 fputs ( provide_error ( status ), stderr );
                 fputc ( '\n', stderr );
                 stack_cleanse ( &repo_stack );
                 return EXIT_FAILURE;
         }
 
-        parse_repo_descriptions ( &repo_stack );
         stack_cleanse ( &repo_stack );
         return EXIT_SUCCESS;
 }

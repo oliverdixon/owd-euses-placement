@@ -4,7 +4,6 @@
 #ifndef _EUSES_H
 #define _EUSES_H
 
-#include <stdio.h>
 #include <linux/limits.h>
 
 struct repo_stack_t {
@@ -14,7 +13,6 @@ struct repo_stack_t {
 
 struct repo_t {
         char location [ PATH_MAX ], name [ NAME_MAX + 1 ];
-        FILE * ptr;
         struct repo_t * next;
 };
 
