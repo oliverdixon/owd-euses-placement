@@ -130,10 +130,20 @@ enum status_t enumerate_repo_descriptions ( char base [ ],
         return ( gentoo_hit ) ? STATUS_OK : STATUS_NOGENR;
 }
 
-/* int parse_repo_descriptions ( struct repo_stack * stack )
+/* parse_repo_descriptions: I'm not sure what the function should do yet. I want
+ * to avoid having loads of passes on the single struct, and I don't
+ * particularly like accessing the next pointer manually either. */
+
+void parse_repo_descriptions ( struct repo_stack_t * stack )
 {
         struct repo_t * repo = stack_peek ( stack );
-} */
+
+        do {
+                /* Make the safe assumption that there exist at least one
+                 * repository-description file on the stack. */
+                puts ( repo->location );
+        } while ( ( repo = repo->next ) != NULL );
+}
 
 int main ( )
 {
@@ -154,6 +164,7 @@ int main ( )
                 return EXIT_FAILURE;
         }
 
+        parse_repo_descriptions ( &repo_stack );
         stack_cleanse ( &repo_stack );
         return EXIT_SUCCESS;
 }
