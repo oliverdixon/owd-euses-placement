@@ -6,10 +6,15 @@
 #include <stdio.h>
 #include <string.h>
 #include <dirent.h>
+#include <ctype.h>
 
 #include "euses.h"
 
 #define BUFFER_SZ ( 4096 )
+
+#define ASCII_MIN ( 0x20 )
+#define ASCII_MAX ( 0x7E )
+
 #define CONFIGROOT_ENVNAME "PORTAGE_CONFIGROOT"
 #define CONFIGROOT_SUFFIX  "/repos.conf/"
 #define CONFIGROOT_DEFAULT "/etc/portage"
@@ -26,7 +31,8 @@ enum status_t {
         STATUS_NOGENR = -3, /* no gentoo.conf repository-description file */
         STATUS_DCLONG = -4, /* the description file is unusually long */
         STATUS_ININME = -5, /* the ini file did not contain "[name]" */
-        STATUS_ININML = -6  /* the name in the ini file exceeded NAME_MAX */
+        STATUS_ININML = -6, /* the name in the ini file exceeded NAME_MAX */
+        STATUS_INILOC = -7  /* the location attribute doesn't exist */
 };
 
 /* provide_error: returns a human-readable string representing an error code, as
@@ -47,7 +53,10 @@ const char * provide_error ( enum status_t status )
                                         "not contain a [name] clause at the" \
                                         " first opportunity.";
                 case STATUS_ININML: return "A repository-description file " \
-                                        "contains an unwieldy name.";
+                                        "contains an unwieldy section name.";
+                case STATUS_INILOC: return "A repository-description file " \
+                                        "does not contain the location " \
+                                        "attribute.";
 
                 default: return "Unknown error";
         }
@@ -77,24 +86,69 @@ enum status_t get_base_dir ( char base [ PATH_MAX ] )
 
 /* ini_get_name: retrieve the repository name from the description file; this is
  * the first non-"DEFAULT" section title, enclosed by '[' and ']'. On success,
- * STATUS_OK is returned, and repo->name contains the name, and on failure,
+ * STATUS_OK is returned, and `name` contains the section name, and on failure,
  * STATUS_ININME or STATUS_ININML is returned, the latter occurring if the given
- * name exceeds NAME_MAX. */
+ * name exceeds NAME_MAX. The `offset` value is set to the address of the
+ * character in the buffer immediately succeeding the closing ']'. */
 
-int ini_get_name ( struct repo_t * repo, char buffer [ BUFFER_SZ ] )
+enum status_t ini_get_name ( char name [ NAME_MAX ], char buffer [ BUFFER_SZ ],
+                int * offset )
 {
-        char * start = NULL, * end = NULL;
+        char * start = NULL, * end = NULL, * buffer_in = buffer;
 
-        if ( ( start = strchr ( buffer, '[' ) ) == NULL
-                        || ( end = strchr ( buffer, ']' ) ) == NULL ||
-                        * ( start++ ) == '\0' || end < start )
-                return STATUS_ININME;
+        do {
+                start = NULL;
+                end = NULL;
 
-        start [ end - start ] = '\0';
+                if ( ( start = strchr ( buffer, '[' ) ) == NULL
+                                || ( end = strchr ( buffer, ']' ) ) == NULL ||
+                                * ( start++ ) == '\0' || * ( end + 1 ) == '\0'
+                                || end < start )
+                        return STATUS_ININME;
+
+                start [ end - start ] = '\0';
+                buffer = end + 1;
+        } while ( strcmp ( start, "DEFAULT" ) == 0 );
+
         if ( strlen ( start ) > NAME_MAX )
                 return STATUS_ININML;
 
-        strcpy ( repo->name, start );
+        *offset = ( end + 1 ) - buffer_in;
+        strcpy ( name, start );
+        return STATUS_OK;
+}
+
+/* ini_get_location: TODO */
+
+enum status_t ini_get_location ( char location [ PATH_MAX ],
+                char buffer [ BUFFER_SZ ] )
+{
+        char * start = strstr ( buffer, "location" );
+        int keyvalue_found = 0;
+
+        if ( start == NULL )
+                return STATUS_INILOC;
+
+        for ( int i = 0; !keyvalue_found && buffer [ i ] != '\0' &&
+                        i < BUFFER_SZ; i++ ) {
+                if ( isspace ( buffer [ i ] ) ) 
+                        continue;
+
+                if ( buffer [ i ] != '=' )
+                        break;
+
+                puts ( "got equals" );
+                start = & ( buffer [ i ] );
+                keyvalue_found = 1;
+        }
+
+        if ( !keyvalue_found || * ( start++ ) < ASCII_MIN ||
+                        * ( start ) > ASCII_MAX )
+                return STATUS_INILOC;
+
+        puts ( "HERE IT COMES..." );
+        puts ( start );
+
         return STATUS_OK;
 }
 
@@ -147,12 +201,24 @@ enum status_t parse_repo_description ( struct repo_t * repo,
 {
         char buffer [ BUFFER_SZ ];
         enum status_t status = STATUS_OK;
+        int offset = 0;
+
+        /*if ( ( status = buffer_repo_description ( desc_path, buffer ) )
+                        != STATUS_OK || ( status =
+                                ini_get_name ( repo->name, buffer, &offset ) )
+                        != STATUS_OK || ( status = 
+                                ini_get_location ( repo->location,
+                                        & ( buffer [ offset ] ) ) )
+                        != STATUS_OK )
+                return status;*/
 
         if ( ( status = buffer_repo_description ( desc_path, buffer ) )
                         != STATUS_OK || ( status =
-                                ini_get_name ( repo, buffer ) ) != STATUS_OK )
+                                ini_get_name ( repo->name, buffer, &offset ) )
+                        != STATUS_OK )
                 return status;
 
+        printf ( "Buffer offset: %d\n", offset );
         puts ( repo->name );
         return STATUS_OK;
 }
