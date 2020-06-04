@@ -24,7 +24,9 @@ enum status_t {
         STATUS_ERRNO  = -1, /* c.f. perror or strerror on errno */
         STATUS_NOREPO = -2, /* no repository-description files were found */
         STATUS_NOGENR = -3, /* no gentoo.conf repository-description file */
-        STATUS_DCLONG = -4  /* the description file is unusually long */
+        STATUS_DCLONG = -4, /* the description file is unusually long */
+        STATUS_ININME = -5, /* the ini file did not contain "[name]" */
+        STATUS_ININML = -6  /* the name in the ini file exceeded NAME_MAX */
 };
 
 /* provide_error: returns a human-readable string representing an error code, as
@@ -41,6 +43,11 @@ const char * provide_error ( enum status_t status )
                 case STATUS_NOGENR: return "gentoo.conf does not exist.";
                 case STATUS_DCLONG: return "A repository-description file " \
                                         "is unusually voluminous.";
+                case STATUS_ININME: return "A repository-description does " \
+                                        "not contain a [name] clause at the" \
+                                        " first opportunity.";
+                case STATUS_ININML: return "A repository-description file " \
+                                        "contains an unwieldy name.";
 
                 default: return "Unknown error";
         }
@@ -68,16 +75,38 @@ enum status_t get_base_dir ( char base [ PATH_MAX ] )
         return STATUS_OK;
 }
 
-/* parse_repo_description: parse the repository-description file, attaining the
- * base location and the name, populating the given struct accordingly. If the
- * repository-description file exceeds the generous amount as provided by the
- * buffer, STATUS_DCLONG is returned. */
+/* ini_get_name: retrieve the repository name from the description file; this is
+ * the first non-"DEFAULT" section title, enclosed by '[' and ']'. On success,
+ * STATUS_OK is returned, and repo->name contains the name, and on failure,
+ * STATUS_ININME or STATUS_ININML is returned, the latter occurring if the given
+ * name exceeds NAME_MAX. */
 
-enum status_t parse_repo_description ( struct repo_t * repo,
-                char desc_path [ ] )
+int ini_get_name ( struct repo_t * repo, char buffer [ BUFFER_SZ ] )
 {
-        FILE * fp = fopen ( desc_path, "r" );
-        char buffer [ BUFFER_SZ ];
+        char * start = NULL, * end = NULL;
+
+        if ( ( start = strchr ( buffer, '[' ) ) == NULL
+                        || ( end = strchr ( buffer, ']' ) ) == NULL ||
+                        * ( start++ ) == '\0' || end < start )
+                return STATUS_ININME;
+
+        start [ end - start ] = '\0';
+        if ( strlen ( start ) > NAME_MAX )
+                return STATUS_ININML;
+
+        strcpy ( repo->name, start );
+        return STATUS_OK;
+}
+
+/* buffer_repo_description: employing length-checks, load, buffer, and close,
+ * the given repository-description file, allowing the driver to disregard the
+ * file pointer. On success, STATUS_OK is returned, and on failure, either
+ * STATUS_ERRNO (with errno set appropriately), or STATUS_DCLONG is returned. */
+
+enum status_t buffer_repo_description ( char path [ ],
+                char buffer [ BUFFER_SZ ] )
+{
+        FILE * fp = fopen ( path, "r" );
         long f_len = 0;
         size_t bytes_read = 0;
 
@@ -105,9 +134,26 @@ enum status_t parse_repo_description ( struct repo_t * repo,
 
         fclose ( fp );
         buffer [ bytes_read ] = '\0';
-        puts ( desc_path );
-        puts ( buffer );
+        return STATUS_OK;
+}
 
+/* parse_repo_description: parse the repository-description file, attaining the
+ * base location and the name, populating the given struct accordingly. If the
+ * repository-description file exceeds the generous amount as provided by the
+ * buffer, STATUS_DCLONG is returned. */
+
+enum status_t parse_repo_description ( struct repo_t * repo,
+                char desc_path [ ] )
+{
+        char buffer [ BUFFER_SZ ];
+        enum status_t status = STATUS_OK;
+
+        if ( ( status = buffer_repo_description ( desc_path, buffer ) )
+                        != STATUS_OK || ( status =
+                                ini_get_name ( repo, buffer ) ) != STATUS_OK )
+                return status;
+
+        puts ( repo->name );
         return STATUS_OK;
 }
 
