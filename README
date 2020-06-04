@@ -1,3 +1,7 @@
+                  == This program is  currently in development, and  is  thus ==
+                  == unusable for its description purpose.  The expected time ==
+                  ==               of a stable deployment is late-June, 2020. ==
+
 `ash-euses` ("the Program") is a rewrite of the  classic  Gentoo  Linux  utility
 `euses`, originally authored by Jeroen Roovers [1, 2], as an attempt to  rectify
 some of the issues presented by modern Gentoo systems to the  original  utility.
