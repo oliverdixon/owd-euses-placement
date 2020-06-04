@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <dirent.h>
-#include <ctype.h>
 
 #include "euses.h"
 
@@ -118,36 +117,62 @@ enum status_t ini_get_name ( char name [ NAME_MAX ], char buffer [ BUFFER_SZ ],
         return STATUS_OK;
 }
 
-/* ini_get_location: TODO */
+/* skip_whitespace: skips horizontal spacing in `str` and returns the position
+ * of the next non-whitespace character. If a null-terminator appears before a
+ * non-whitespace character is found, NULL is returned. */
+
+char * skip_whitespace ( char * str )
+{
+        unsigned int i = 0;
+
+        for ( ; ; i++ )
+                switch ( str [ i ] ) {
+                        case 0x20:
+                        case 0x09:
+                                continue;
+                        case 0x00:
+                                return NULL;
+                        default:
+                                return & ( str [ i ] );
+                }
+}
+
+/* ini_get_location: gets the value of the `location` key in the ini file
+ * provided in `buffer`, ignoring all horizontal whitespace; see the
+ * skip_whitespace function. On success, this function returns STATUS_OK and
+ * writes the appropriate value into the `location` string. On failure,
+ * STATUS_INILOC is returned. */
 
 enum status_t ini_get_location ( char location [ PATH_MAX ],
                 char buffer [ BUFFER_SZ ] )
 {
-        char * start = strstr ( buffer, "location" );
+        const char * key = "location";
+        char * start = strstr ( buffer, key );
         int keyvalue_found = 0;
 
         if ( start == NULL )
                 return STATUS_INILOC;
 
-        for ( int i = 0; !keyvalue_found && buffer [ i ] != '\0' &&
+        start += strlen ( key );
+        if ( ( start = skip_whitespace ( start ) ) == NULL )
+                return STATUS_INILOC;
+
+        for ( int i = 0; !keyvalue_found && start [ i ] != '\0' &&
                         i < BUFFER_SZ; i++ ) {
-                if ( isspace ( buffer [ i ] ) ) 
-                        continue;
+                if ( start [ i ] == '=' )
+                        keyvalue_found = 1;
 
-                if ( buffer [ i ] != '=' )
-                        break;
-
-                puts ( "got equals" );
-                start = & ( buffer [ i ] );
-                keyvalue_found = 1;
+                break;
         }
 
         if ( !keyvalue_found || * ( start++ ) < ASCII_MIN ||
                         * ( start ) > ASCII_MAX )
                 return STATUS_INILOC;
 
-        puts ( "HERE IT COMES..." );
-        puts ( start );
+        if ( ( start = skip_whitespace ( start ) ) == NULL )
+                return STATUS_INILOC;
+
+        puts ( start ); /* TODO: write to `location` */
 
         return STATUS_OK;
 }
@@ -203,22 +228,15 @@ enum status_t parse_repo_description ( struct repo_t * repo,
         enum status_t status = STATUS_OK;
         int offset = 0;
 
-        /*if ( ( status = buffer_repo_description ( desc_path, buffer ) )
+        if ( ( status = buffer_repo_description ( desc_path, buffer ) )
                         != STATUS_OK || ( status =
                                 ini_get_name ( repo->name, buffer, &offset ) )
                         != STATUS_OK || ( status = 
                                 ini_get_location ( repo->location,
                                         & ( buffer [ offset ] ) ) )
                         != STATUS_OK )
-                return status;*/
-
-        if ( ( status = buffer_repo_description ( desc_path, buffer ) )
-                        != STATUS_OK || ( status =
-                                ini_get_name ( repo->name, buffer, &offset ) )
-                        != STATUS_OK )
                 return status;
 
-        printf ( "Buffer offset: %d\n", offset );
         puts ( repo->name );
         return STATUS_OK;
 }
