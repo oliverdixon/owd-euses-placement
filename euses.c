@@ -31,7 +31,8 @@ enum status_t {
         STATUS_DCLONG = -4, /* the description file is unusually long */
         STATUS_ININME = -5, /* the ini file did not contain "[name]" */
         STATUS_ININML = -6, /* the name in the ini file exceeded NAME_MAX */
-        STATUS_INILOC = -7  /* the location attribute doesn't exist */
+        STATUS_INILOC = -7, /* the location attribute doesn't exist */
+        STATUS_INILCS = -8  /* the location value exceeded PATH_MAX - 1 */ 
 };
 
 /* provide_error: returns a human-readable string representing an error code, as
@@ -56,6 +57,8 @@ const char * provide_error ( enum status_t status )
                 case STATUS_INILOC: return "A repository-description file " \
                                         "does not contain the location " \
                                         "attribute.";
+                case STATUS_INILCS: return "A repository-description file" \
+                                        "contains an unwieldy location value.";
 
                 default: return "Unknown error";
         }
@@ -147,7 +150,7 @@ enum status_t ini_get_location ( char location [ PATH_MAX ],
                 char buffer [ BUFFER_SZ ] )
 {
         const char * key = "location";
-        char * start = strstr ( buffer, key );
+        char * start = strstr ( buffer, key ), * end = NULL;
         int keyvalue_found = 0;
 
         if ( start == NULL )
@@ -169,11 +172,16 @@ enum status_t ini_get_location ( char location [ PATH_MAX ],
                         * ( start ) > ASCII_MAX )
                 return STATUS_INILOC;
 
-        if ( ( start = skip_whitespace ( start ) ) == NULL )
+        if ( ( start = skip_whitespace ( start ) ) == NULL ||
+                        ( end = strchr ( start, '\n' ) ) == NULL ||
+                        end < start )
                 return STATUS_INILOC;
 
-        puts ( start ); /* TODO: write to `location` */
+        start [ end - start ] = '\0';
+        if ( strlen ( start ) >= PATH_MAX )
+                return STATUS_INILCS;
 
+        strcpy ( location, start );
         return STATUS_OK;
 }
 
@@ -237,7 +245,6 @@ enum status_t parse_repo_description ( struct repo_t * repo,
                         != STATUS_OK )
                 return status;
 
-        puts ( repo->name );
         return STATUS_OK;
 }
 
@@ -272,8 +279,8 @@ enum status_t register_repo ( char base [ ], char * filename,
                 return status;
 
         repo->next = NULL;
-
         stack_push ( stack, repo );
+
         return STATUS_OK;
 }
 
