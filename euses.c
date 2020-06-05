@@ -17,7 +17,7 @@
 #define CONFIGROOT_ENVNAME "PORTAGE_CONFIGROOT"
 #define CONFIGROOT_SUFFIX  "/repos.conf/"
 #define CONFIGROOT_DEFAULT "/etc/portage"
-#define PORTDIR_ENVNAME "PORTDIR"
+#define PROFILES_SUFFIX "/profiles/"
 
 struct desc_t {
         char location [ PATH_MAX ];
@@ -33,7 +33,9 @@ enum status_t {
         STATUS_ININME = -5, /* the ini file did not contain "[name]" */
         STATUS_ININML = -6, /* the name in the ini file exceeded NAME_MAX */
         STATUS_INILOC = -7, /* the location attribute doesn't exist */
-        STATUS_INILCS = -8  /* the location value exceeded PATH_MAX - 1 */ 
+        STATUS_INILCS = -8, /* the location value exceeded PATH_MAX - 1 */ 
+        STATUS_NOREPD = -9, /* no repository directories were found */
+        STATUS_BADARG = -10  /* inadequate command-line arguments */ 
 };
 
 /* provide_error: returns a human-readable string representing an error code, as
@@ -60,6 +62,9 @@ const char * provide_error ( enum status_t status )
                                         "attribute.";
                 case STATUS_INILCS: return "A repository-description file" \
                                         "contains an unwieldy location value.";
+                case STATUS_NOREPD: return "No repositories were found.";
+                case STATUS_BADARG: return "Inadequate command-line arguments" \
+                                        " were provided.";
 
                 default: return "Unknown error";
         }
@@ -322,11 +327,91 @@ enum status_t enumerate_repo_descriptions ( char base [ ],
         return ( gentoo_hit ) ? STATUS_OK : STATUS_NOGENR;
 }
 
-int main ( )
+/* get_file_ext: returns the file extension---from the final '.' to the
+ * null-terminator---of the given string. If the string does not contain '.',
+ * or it is immediately followed by a null-terminator, NULL is returned. */
+
+char * get_file_ext ( const char * filename )
+{
+        char * ext = strrchr ( filename, '.' );
+        return ( ext == NULL || * ( ext++ ) == '\0' ) ? NULL : ext;
+}
+
+/* find_desc_files: find the USE-description files in the `repo_base` directory,
+ * with a depth of two (profiles/{,base/}). If the complete filename is too
+ * long, or the directory cannot be opened, errno is set appropriately and
+ * STATUS_ERRNO is returned. */
+
+int find_desc_files ( char repo_base [ PATH_MAX ] )
+{
+        DIR * dp = NULL;
+        struct dirent * dir = NULL;
+        char * ext = NULL;
+
+        if ( strlen ( PROFILES_SUFFIX ) + strlen ( repo_base ) >= PATH_MAX ) {
+                errno = ENAMETOOLONG;
+                return STATUS_ERRNO;
+        }
+
+        strcat ( repo_base, PROFILES_SUFFIX );
+
+        if ( ( dp = opendir ( repo_base ) ) == NULL )
+                return STATUS_ERRNO;
+
+        while ( ( dir = readdir ( dp ) ) != NULL )
+                if ( dir->d_type == DT_REG ) {
+                        ext = get_file_ext ( dir->d_name );
+                        printf ( "\t%-16s\t%-16s\t%-16s\n", dir->d_name, ext,
+                                        ( ext && strcmp ( ext, "desc" ) == 0 )
+                                                ? "USE" : "IGNORE" );
+                }
+
+        closedir ( dp );
+        return STATUS_OK;
+}
+
+/* buffer_desc_files: concatenate the USE-description files into a given buffer.
+ * fp_tmp is set as a file handle to the current file being buffered, allowing
+ * this function to be called recursively until all files have been buffered and
+ * processed. */
+
+/* TODO
+int buffer_desc_files ( char location [ PATH_MAX ], char buffer [ BUFFER_SZ ],
+                FILE ** fp_tmp )
+{
+        return 0;
+}*/
+
+/* search_files: search the *.{,local.}desc files in the repo `location`
+ * directory to find any of the given needles. Once a repository's files have
+ * completely been scanned, it is popped from the stack. */
+
+enum status_t search_files ( struct repo_stack_t * stack, char ** needles )
+{
+        struct repo_t * repo = stack_pop ( stack );
+
+        if ( repo == NULL )
+                return STATUS_NOREPD;
+
+        do {
+                find_desc_files ( repo->location ); 
+                putchar ( '\n' );
+        } while ( ( repo = stack_pop ( stack ) ) != NULL );
+
+        return STATUS_OK;
+}
+
+int main ( int argc, char ** argv )
 {
         char base [ PATH_MAX ];
         struct repo_stack_t repo_stack;
         enum status_t status = STATUS_OK;
+
+        if ( argc < 2 ) {
+                fputs ( provide_error ( STATUS_BADARG ), stderr );
+                fputc ( '\n', stderr );
+                return EXIT_FAILURE;
+        }
 
         stack_init ( &repo_stack );
 
@@ -342,6 +427,20 @@ int main ( )
         }
 
         stack_print ( &repo_stack );
+        putchar ( '\n' );
+
+        /* TODO: split main to allow direct-printing to stderr, possibly with an
+         * optional prefix. */
+        if ( ( status = search_files ( &repo_stack, & ( argv [ 1 ] ) ) )
+                        != STATUS_OK ) {
+                fputs ( "Could not load the USE-description files:\n\t",
+                                stderr );
+                fputs ( provide_error ( status ), stderr );
+                fputc ( '\n', stderr );
+                stack_cleanse ( &repo_stack );
+                return EXIT_FAILURE;
+        }
+
         stack_cleanse ( &repo_stack );
         return EXIT_SUCCESS;
 }
