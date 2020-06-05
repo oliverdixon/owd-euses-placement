@@ -38,6 +38,12 @@ enum status_t {
         STATUS_BADARG = -10  /* inadequate command-line arguments */ 
 };
 
+enum dir_status_t {
+        DIRSTAT_DONE  =  1,
+        DIRSTAT_MORE  =  0,
+        DIRSTAT_ERRNO = -1
+};
+
 /* provide_error: returns a human-readable string representing an error code, as
  * enumerated in status_t. If the passed code is STATUS_ERRNO, the strerror
  * function is used with the current value of errno. */
@@ -337,50 +343,58 @@ char * get_file_ext ( const char * filename )
         return ( ext == NULL || * ( ext++ ) == '\0' ) ? NULL : ext;
 }
 
-/* find_desc_files: find the USE-description files in the `repo_base` directory,
- * with a depth of two (profiles/{,base/}). If the complete filename is too
- * long, or the directory cannot be opened, errno is set appropriately and
- * STATUS_ERRNO is returned. */
+/* find_next_desc_file: (temp: print) the name of the next regular file with the
+ * "desc" extension in the repo_base directory. If there is an error reading the
+ * directory stream, DIRSTAT_ERRNO is returned, and the caller can refer to
+ * `errno`. DIRSTAT_DONE indicates that the current directory stream has been
+ * exhausted for regular files, and should this function should not be called
+ * again until `dp` points to a new directory pointer supplied by
+ * construct_profiles_path. If DIRSTAT_MORE is returned, this function can be
+ * called again with an externally unmodified value of `dp` to reveal a new
+ * regular file in the directory. */
 
-int find_desc_files ( char repo_base [ PATH_MAX ] )
+enum dir_status_t find_next_desc_file ( char repo_base [ PATH_MAX ], DIR ** dp )
 {
-        DIR * dp = NULL;
         struct dirent * dir = NULL;
         char * ext = NULL;
+        errno = 0;
 
-        if ( strlen ( PROFILES_SUFFIX ) + strlen ( repo_base ) >= PATH_MAX ) {
-                errno = ENAMETOOLONG;
-                return STATUS_ERRNO;
-        }
-
-        strcat ( repo_base, PROFILES_SUFFIX );
-
-        if ( ( dp = opendir ( repo_base ) ) == NULL )
-                return STATUS_ERRNO;
-
-        while ( ( dir = readdir ( dp ) ) != NULL )
-                if ( dir->d_type == DT_REG ) {
-                        ext = get_file_ext ( dir->d_name );
-                        printf ( "\t%-16s\t%-16s\t%-16s\n", dir->d_name, ext,
-                                        ( ext && strcmp ( ext, "desc" ) == 0 )
-                                                ? "USE" : "IGNORE" );
+        do {
+                if ( ( dir = readdir ( *dp ) ) == NULL ) {
+                        if ( errno != 0 )
+                                /* On reaching the end of the stream,
+                                 * errno is not changed. */
+                                return DIRSTAT_ERRNO;
+                        return DIRSTAT_DONE;
                 }
 
-        closedir ( dp );
-        return STATUS_OK;
+                ext = get_file_ext ( dir->d_name );
+        } while ( dir->d_type != DT_REG || ( !ext ||
+                                strcmp ( ext, "desc" ) != 0 ) );
+
+        puts ( dir->d_name );
+        return DIRSTAT_MORE;
 }
 
-/* buffer_desc_files: concatenate the USE-description files into a given buffer.
- * fp_tmp is set as a file handle to the current file being buffered, allowing
- * this function to be called recursively until all files have been buffered and
- * processed. */
+/* construct_profiles_path: concatenate the base repository path and profile
+ * suffix, and attempt to open the resultant directory. If this function returns
+ * zero, the caller must clean-up the opendir call, otherwise, -1 on failure.
+ * This only needs to be called once-per-repository. */
 
-/* TODO
-int buffer_desc_files ( char location [ PATH_MAX ], char buffer [ BUFFER_SZ ],
-                FILE ** fp_tmp )
+int construct_profiles_path ( char path [ PATH_MAX ], DIR ** dp )
 {
+        if ( strlen ( PROFILES_SUFFIX ) + strlen ( path ) >= PATH_MAX ) {
+                errno = ENAMETOOLONG;
+                return -1;
+        }
+
+        strcat ( path, PROFILES_SUFFIX );
+
+        if ( ( *dp = opendir ( path ) ) == NULL )
+                return -1;
+
         return 0;
-}*/
+}
 
 /* search_files: search the *.{,local.}desc files in the repo `location`
  * directory to find any of the given needles. Once a repository's files have
@@ -389,13 +403,19 @@ int buffer_desc_files ( char location [ PATH_MAX ], char buffer [ BUFFER_SZ ],
 enum status_t search_files ( struct repo_stack_t * stack, char ** needles )
 {
         struct repo_t * repo = stack_pop ( stack );
+        DIR * dirp = NULL;
 
         if ( repo == NULL )
                 return STATUS_NOREPD;
 
         do {
-                find_desc_files ( repo->location ); 
-                putchar ( '\n' );
+                if ( construct_profiles_path ( repo->location, &dirp ) == -1 )
+                        return STATUS_ERRNO;
+
+                /* TODO: error-checking, probably in a different function. */
+                while ( find_next_desc_file ( repo->location, &dirp )
+                                != DIRSTAT_DONE );
+                closedir ( dirp );
         } while ( ( repo = stack_pop ( stack ) ) != NULL );
 
         return STATUS_OK;
