@@ -17,6 +17,7 @@
 #define CONFIGROOT_ENVNAME "PORTAGE_CONFIGROOT"
 #define CONFIGROOT_SUFFIX  "/repos.conf/"
 #define CONFIGROOT_DEFAULT "/etc/portage"
+#define PORTDIR_ENVNAME "PORTDIR"
 
 struct desc_t {
         char location [ PATH_MAX ];
@@ -323,21 +324,33 @@ enum status_t enumerate_repo_descriptions ( char base [ ],
 
 int main ( )
 {
-        char base [ PATH_MAX ];
+        char base [ PATH_MAX ], * portdir_path = NULL;
         struct repo_stack_t repo_stack;
         enum status_t status = STATUS_OK;
 
         stack_init ( &repo_stack );
 
-        if ( ( status = get_base_dir ( base ) != STATUS_OK ) ||
-                        ( status = enumerate_repo_descriptions ( base,
-                                &repo_stack ) ) != STATUS_OK ) {
-                fputs ( "Could not use the repository-description base " \
-                                "directory:\n\t", stderr );
-                fputs ( provide_error ( status ), stderr );
-                fputc ( '\n', stderr );
-                stack_cleanse ( &repo_stack );
-                return EXIT_FAILURE;
+        if ( ( portdir_path = getenv ( PORTDIR_ENVNAME ) ) == NULL
+                        || strlen ( portdir_path ) >= PATH_MAX ) {
+                if ( ( status = get_base_dir ( base ) != STATUS_OK ) ||
+                                ( status = enumerate_repo_descriptions ( base,
+                                        &repo_stack ) ) != STATUS_OK ) {
+                        fputs ( "Could not use the repository-description " \
+                                        "base directory:\n\t", stderr );
+                        fputs ( provide_error ( status ), stderr );
+                        fputc ( '\n', stderr );
+                        stack_cleanse ( &repo_stack );
+                        return EXIT_FAILURE;
+                }
+        } else {
+                strcpy ( base, portdir_path ); /* TODO: move this warning */
+                puts ( "Warning: PORTDIR is set in the environment; " \
+                                "this is obsolete for modern Gentoo\nsystems " \
+                                "and should be replaced with repos.conf/ " \
+                                "configuration files. The current\nvalue of " \
+                                "PORTDIR will be respected for the current " \
+                                "session of euses, meaning\nthat any files in " \
+                                "repos.conf/ will be ignored." );
         }
 
         stack_cleanse ( &repo_stack );
