@@ -2,6 +2,8 @@
  * Ashley Dixon. */
 
 #include <stdlib.h>
+#include <stdio.h>
+
 #include "euses.h"
 
 /* stack_peek: peeks at the leading node of the stack. */
@@ -54,5 +56,24 @@ void stack_cleanse ( struct repo_stack_t * stack )
 
         for ( unsigned int i = 0; i < size; i++ )
                 free ( stack_pop ( stack ) );
+}
+
+/* stack_print: recursively print all the names and locations of the
+ * repositories on the given stack. If an underflow occurs, a message is
+ * printed to stdout. */
+
+void stack_print ( struct repo_stack_t * stack )
+{
+        struct repo_t * repo = stack_peek ( stack );
+
+        if ( repo == NULL ) {
+                puts ( "The stack is empty." );
+                return;
+        }
+
+        do {
+                printf ( "Name: %-16s\tLocation: %-16s\n", repo->name,
+                                repo->location );
+        } while ( ( repo = repo->next ) != NULL );
 }
 
