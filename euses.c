@@ -34,7 +34,7 @@ enum status_t {
         STATUS_ININML = -6, /* the name in the ini file exceeded NAME_MAX */
         STATUS_INILOC = -7, /* the location attribute doesn't exist */
         STATUS_INILCS = -8, /* the location value exceeded PATH_MAX - 1 */ 
-        STATUS_BADARG = -9  /* inadequate command-line arguments */ 
+        STATUS_INIEMP = -9  /* the repository-description file was empty */ 
 };
 
 enum dir_status_t {
@@ -75,8 +75,6 @@ const char * provide_error ( enum status_t status )
                                         "attribute.";
                 case STATUS_INILCS: return "A repository-description file" \
                                         "contains an unwieldy location value.";
-                case STATUS_BADARG: return "Inadequate command-line arguments" \
-                                        " were provided.";
 
                 default: return "Unknown error";
         }
@@ -139,8 +137,9 @@ enum status_t ini_get_name ( char name [ NAME_MAX ], char buffer [ BUFFER_SZ ],
                 if ( ( start = strchr ( buffer, '[' ) ) == NULL
                                 || ( end = strchr ( buffer, ']' ) ) == NULL ||
                                 * ( start++ ) == '\0' || * ( end + 1 ) == '\0'
-                                || end < start )
+                                || end < start ) {
                         return STATUS_ININME;
+                }
 
                 start [ end - start ] = '\0';
                 buffer = end + 1;
@@ -171,6 +170,28 @@ char * skip_whitespace ( char * str )
                         default:
                                 return & ( str [ i ] );
                 }
+}
+
+/* is_file_empty: checks if `fp` points to an empty file, returning one or zero
+ * accordingly. If an error occurs, -1 is returned. In all cases, this function
+ * attempts to revert the file cursor back to its previous position, however
+ * this may not reflect reality if one of the clean-up calls to `fseek` fail. */
+
+int is_file_empty ( FILE * fp )
+{
+        long pos = 0, size = 0;
+
+        if ( fp == NULL || ( pos = ftell ( fp ) ) == -1 )
+                return -1;
+
+        if ( fseek ( fp, 0, SEEK_END ) == -1 ||
+                        ( size = ftell ( fp ) ) == -1 ) {
+                fseek ( fp, pos, SEEK_SET );
+                return -1;
+        }
+
+        fseek ( fp, pos, SEEK_SET );
+        return ( size == 0 );
 }
 
 /* ini_get_location: gets the value of the `location` key in the ini file
@@ -221,7 +242,8 @@ enum status_t ini_get_location ( char location [ PATH_MAX ],
 /* buffer_repo_description: employing length-checks, load, buffer, and close,
  * the given repository-description file, allowing the driver to disregard the
  * file pointer. On success, STATUS_OK is returned, and on failure, either
- * STATUS_ERRNO (with errno set appropriately), or STATUS_DCLONG is returned. */
+ * STATUS_ERRNO (with errno set appropriately), or STATUS_DCLONG is returned. If
+ * the file is empty, STATUS_INIEMP is returned. */
 
 enum status_t buffer_repo_description ( char path [ ],
                 char buffer [ BUFFER_SZ ] )
@@ -241,8 +263,15 @@ enum status_t buffer_repo_description ( char path [ ],
 
         rewind ( fp );
         if ( f_len >= BUFFER_SZ ) {
+                /* the repository-description file would not fit the buffer */
                 fclose ( fp );
                 return STATUS_DCLONG;
+        }
+
+        if ( f_len == 0 ) {
+                /* the file is empty, and the INI-parser would fail */
+                fclose ( fp );
+                return STATUS_INIEMP;
         }
 
         if ( ( bytes_read = fread ( buffer, sizeof ( char ), BUFFER_SZ - 1,
@@ -345,6 +374,9 @@ enum status_t enumerate_repo_descriptions ( char base [ ],
                         if ( ( status = register_repo ( base, dir->d_name,
                                                         stack ) )
                                         != STATUS_OK ) {
+                                if ( status == STATUS_INIEMP )
+                                        continue; /* ignore empty files */
+
                                 dnull ( &dp );
                                 return status;
                         }
@@ -369,12 +401,12 @@ char * get_file_ext ( const char * filename )
  * directory stream, DIRSTAT_ERRNO is returned, and the caller can refer to
  * `errno`. DIRSTAT_DONE indicates that the current directory stream has been
  * exhausted for regular files, and this function should not be called again
- * until `dp` points to a new directory pointer supplied by
- * construct_profiles_path (opendir). If DIRSTAT_MORE is returned, this function
- * can be called again with an externally unmodified value of `dp` to reveal a
- * new regular file in the directory. If the name of the file cannot be
- * concatenated to the repository base path due to length, errno is set
- * appropriately and DIRSTAT_ERRNO is returned. */
+ * until `dp` points to a new directory pointer supplied by open_profiles_path
+ * (opendir). If DIRSTAT_MORE is returned, this function can be called again
+ * with an externally unmodified value of `dp` to reveal a new regular file in
+ * the directory. If the name of the file cannot be concatenated to the
+ * repository base path due to length, errno is set appropriately and
+ * DIRSTAT_ERRNO is returned. */
 
 enum dir_status_t find_next_desc_file ( char repo_base [ PATH_MAX ], DIR ** dp )
 {
@@ -401,17 +433,17 @@ enum dir_status_t find_next_desc_file ( char repo_base [ PATH_MAX ], DIR ** dp )
         }
 
         /* This is safe; the previously appended suffix should end in a oblique
-         * - see construct_profiles_path. */
+         * - see open_profiles_path. */
         strcat ( repo_base, dir->d_name );
         return DIRSTAT_MORE;
 }
 
-/* construct_profiles_path: concatenate the base repository path and profile
+/* open_profiles_path: concatenate the base repository path and profile
  * suffix, and attempt to open the resultant directory. If this function returns
  * zero, the caller must clean-up the opendir call, otherwise, -1 on failure.
  * This only needs to be called once-per-repository. */
 
-int construct_profiles_path ( char path [ PATH_MAX ], DIR ** dp )
+int open_profiles_path ( char path [ PATH_MAX ], DIR ** dp )
 {
         if ( strlen ( PROFILES_SUFFIX ) + strlen ( path ) >= PATH_MAX ) {
                 errno = ENAMETOOLONG;
@@ -422,95 +454,93 @@ int construct_profiles_path ( char path [ PATH_MAX ], DIR ** dp )
         return ( ( *dp = opendir ( path ) ) == NULL ) ? -1 : 0;
 }
 
-/* buffer_desc_file: buffer the USE-description file, specified by `path`. The
- * caller should not modify the value of `fp` itself - just keep it in a
- * persistent state. This function should be called recursively until
- * BUFSTAT_ERRNO or BUFSTAT_FULL is returned, modifying the path to the next
- * contender returned by find_next_desc_file when BUFSTAT_MORE is returned. */
+/* feof_stream: feof alternative, removing the reliance on file-handling
+ * functions, such as fread, to set the end-of-file indicator. Unfortunately,
+ * when reading a file of size 4096 into a buffer of identical capacity, fread
+ * only flags EOF upon attempting to read the 4097th character; thus, feof
+ * cannot be relied upon. This function returns -1 on error, zero if the file
+ * has not reached the end, and 1 if the inverse is true. In any case, the file
+ * cursor is reverted to its previous state. */
 
-enum buffer_status_t buffer_desc_file ( char buffer [ BUFFER_SZ ], FILE ** fp,
-                char path [ PATH_MAX ], size_t * buffer_idx )
+int feof_stream ( FILE * fp )
 {
-        size_t bytes_written = 0;
+        long pos = 0, len = 0;
+
+        if ( ( pos = ftell ( fp ) ) == -1 || fseek ( fp, 0, SEEK_END ) == -1 )
+                return -1;
+
+        if ( ( len = ftell ( fp ) ) == -1 ) {
+                fseek ( fp, pos, SEEK_SET );
+                return -1;
+        }
+
+        if ( fseek ( fp, pos, SEEK_SET ) == -1 )
+                return -1;
+
+        return ( pos == len );
+}
+
+/* populate_buffer: assuming the `fp` file pointer remains persistent and
+ * unmodified by the caller, this function loads a file, provided by `path` into
+ * the given buffer of BUFFER_SZ. If the buffer is filled, BUFSTAT_FULL or
+ * BUFSTAT_BORDR is returned, dependent upon the position of the file cursor; if
+ * the file has filled the buffer perfectly, BUFSTAT_BORDR (borderline case) is
+ * returned. If the buffer has not been filled due to a lack of bytes in the
+ * file, BUFSTAT_MORE is returned, and the next call to this function should
+ * contain a new path. If the file cannot be opened or read, BUFSTAT_ERRNO is
+ * returned, and the caller must confer with errno. `idx` stores the next
+ * writeable index of the buffer, and should be kept persistent and unchanged by
+ * the caller. */
+
+enum buffer_status_t populate_buffer ( char * path, char buffer [ BUFFER_SZ ],
+                FILE ** fp, size_t * idx )
+{
+        size_t bw = 0;
+
+        /* ensure the buffer is null-terminated */
+        buffer [ BUFFER_SZ - 1 ] = '\0';
 
         if ( *fp == NULL && ( *fp = fopen ( path, "r" ) ) == NULL )
-                return BUFSTAT_ERRNO;
+                return BUFSTAT_ERRNO; /* the file cannot be opened */
 
-        bytes_written = fread ( & ( buffer [ *buffer_idx ] ),
-                                sizeof ( char ), BUFFER_SZ - 1, *fp );
+        if ( ( bw = fread ( & ( buffer [ *idx ] ), sizeof ( char ),
+                                        BUFFER_SZ - 1 - *idx, *fp ) )
+                        < BUFFER_SZ - 1 ) {
+                if ( ( *idx += bw ) == BUFFER_SZ - 1 ) {
+                        *idx = 0;
+                        return BUFSTAT_FULL;
+                }
 
-        if ( bytes_written <= BUFFER_SZ ) {
-                if ( feof ( * fp ) ) {
-                        *buffer_idx += bytes_written - 1;
-                        buffer [ *buffer_idx ] = '\0';
+                buffer [ *idx ] = '\0';
+                if ( feof_stream ( *fp ) == 1 ) {
+                        /* the buffer has not been filled because the
+                         * file has no more bytes */
                         fnull ( fp );
                         return BUFSTAT_MORE;
                 }
 
+                /* the buffer has not been filled because there was an error
+                 * with fread, the details of which were written to errno */
                 fnull ( fp );
                 return BUFSTAT_ERRNO;
         }
 
-        if ( bytes_written == BUFFER_SZ - 1 ) {
-                *buffer_idx += BUFFER_SZ - 1;
-                buffer [ *buffer_idx ] = '\0';
+        if ( bw == BUFFER_SZ - 1 ) {
+                *idx = 0;
 
-                if ( feof ( *fp ) ) {
-                        /* borderline case: file fills the buffer perfectly */
+                if ( feof_stream ( *fp ) == 1 ) {
+                        /* borderline case: the buffer has been filled, and the
+                         * file has ended */
                         fnull ( fp );
                         return BUFSTAT_BORDR;
                 }
 
+                /* the buffer has been filled, and there is still more in the
+                 * current file */
                 return BUFSTAT_FULL;
         }
 
-        return BUFSTAT_DUMMY; /* appease compilers; this will never occur */
-}
-
-/* aggregate_buffer: fill a buffer or exhaust a directory stream by
- * concatenating the appropriate files in the given repo->location base path.
- * *dp maintains a pointer to the currently open directory stream. If this
- * function returns zero, the buffer is full and ready for searching. If it
- * returns -1, an error has occurred, and 1 indicates that the directory stream
- * has been exhausted of description files.
- *
- * TODO: comprehensive error-checking for boundary and excessive cases */
-
-int aggregate_buffer ( char buffer [ BUFFER_SZ ], struct repo_t * repo,
-                DIR ** dp )
-{
-                          /* *dp holds the current directory stream */
-        FILE * fp = NULL; /* holds the current file being buffered */
-        unsigned int repo_base_len = 0;
-        enum buffer_status_t bufstat = BUFSTAT_DUMMY;
-        enum dir_status_t dirstat = DIRSTAT_DONE;
-        size_t buffer_idx = 0;
-
-        repo_base_len = strlen ( repo->location );
-
-        while ( bufstat != BUFSTAT_ERRNO ) {
-                if ( bufstat == BUFSTAT_BORDR || bufstat == BUFSTAT_FULL ) {
-                        return 0; /* the buffer is full; ready for searching */
-                }
-
-                if ( ( dirstat = find_next_desc_file ( repo->location, dp ) )
-                                == DIRSTAT_DONE ) {
-                        dnull ( dp );
-                        return 1; /* description files exhausted */
-                }
-
-                bufstat = buffer_desc_file ( buffer, &fp, repo->location,
-                                &buffer_idx );
-
-                puts ( repo->location );
-                /* truncate to original length
-                 * (pre-find_next_desc_file) */
-                repo->location [ repo_base_len ] = '\0';
-        }
-
-        dnull ( dp );
-        repo->location [ repo_base_len ] = '\0';
-        return -1; /* error */
+        return BUFSTAT_DUMMY; /* appease compilers */
 }
 
 /* search_files: search the *.{,local.}desc files in the repo `location`
@@ -524,33 +554,23 @@ enum status_t search_files ( struct repo_stack_t * stack, char ** needles )
         DIR * dp = NULL;
 
         while ( ( repo = stack_pop ( stack ) ) != NULL ) {
-                if ( construct_profiles_path ( repo->location, &dp ) == -1 )
+                if ( open_profiles_path ( repo->location, &dp ) == -1 )
                         return STATUS_ERRNO;
 
-                if ( aggregate_buffer ( buffer, repo, &dp ) == 1 ) {
-                        puts ( "buffer done" );
-                        puts ( buffer );
-                }
-
+                /* TODO: populate_buffer here */
+                puts ( repo->location );
                 free ( repo );
-                if ( dp != NULL )
-                        dnull ( &dp );
-        } 
+                dnull ( &dp );
+        }
 
         return STATUS_OK;
 }
 
-int main ( int argc, char ** argv )
+int main ( )
 {
         char base [ PATH_MAX ];
         struct repo_stack_t repo_stack;
         enum status_t status = STATUS_OK;
-
-        if ( argc < 2 ) {
-                fputs ( provide_error ( STATUS_BADARG ), stderr );
-                fputc ( '\n', stderr );
-                return EXIT_FAILURE;
-        }
 
         stack_init ( &repo_stack );
 
@@ -570,8 +590,7 @@ int main ( int argc, char ** argv )
 
         /* TODO: split main to allow direct-printing to stderr, possibly with an
          * optional prefix. */
-        if ( ( status = search_files ( &repo_stack, & ( argv [ 1 ] ) ) )
-                        != STATUS_OK ) {
+        if ( ( status = search_files ( &repo_stack, NULL ) ) != STATUS_OK ) {
                 fputs ( "Could not load the USE-description files:\n\t",
                                 stderr );
                 fputs ( provide_error ( status ), stderr );
