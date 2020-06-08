@@ -172,28 +172,6 @@ char * skip_whitespace ( char * str )
                 }
 }
 
-/* is_file_empty: checks if `fp` points to an empty file, returning one or zero
- * accordingly. If an error occurs, -1 is returned. In all cases, this function
- * attempts to revert the file cursor back to its previous position, however
- * this may not reflect reality if one of the clean-up calls to `fseek` fail. */
-
-int is_file_empty ( FILE * fp )
-{
-        long pos = 0, size = 0;
-
-        if ( fp == NULL || ( pos = ftell ( fp ) ) == -1 )
-                return -1;
-
-        if ( fseek ( fp, 0, SEEK_END ) == -1 ||
-                        ( size = ftell ( fp ) ) == -1 ) {
-                fseek ( fp, pos, SEEK_SET );
-                return -1;
-        }
-
-        fseek ( fp, pos, SEEK_SET );
-        return ( size == 0 );
-}
-
 /* ini_get_location: gets the value of the `location` key in the ini file
  * provided in `buffer`, ignoring all horizontal whitespace; see the
  * skip_whitespace function. On success, this function returns STATUS_OK and
