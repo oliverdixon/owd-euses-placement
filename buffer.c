@@ -2,7 +2,6 @@
  * Ashley Dixon. */
 
 #include <stdio.h>
-#include <dirent.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
@@ -28,7 +27,34 @@ static inline void fnull ( FILE ** fp )
         *fp = NULL;
 }
 
-/* idx must be persistent across calls if the buffer has not been filled */
+/* feof_stream: feof alternative, removing the reliance on file-handling
+ * functions, such as fread, to set the end-of-file indicator. Unfortunately,
+ * when reading a file of size 4096 into a buffer of identical capacity, fread
+ * only flags EOF upon attempting to read the 4097th character; thus, feof
+ * cannot be relied upon. This function returns -1 on error, zero if the file
+ * has not reached the end, and 1 if the inverse is true. In any case, the file
+ * cursor is reverted to its previous state. */
+
+int feof_stream ( FILE * fp )
+{
+        long pos = 0, len = 0;
+
+        if ( ( pos = ftell ( fp ) ) == -1 || fseek ( fp, 0, SEEK_END ) == -1 )
+                return -1;
+
+        if ( ( len = ftell ( fp ) ) == -1 ) {
+                fseek ( fp, pos, SEEK_SET );
+                return -1;
+        }
+
+        if ( fseek ( fp, pos, SEEK_SET ) == -1 )
+                return -1;
+
+        return ( pos == len );
+}
+
+/* idx must be persistent across calls if the buffer has not been filled
+ * TODO: can this function be split, perhaps ? */
 
 /* potentialities:
  *      BUFSTAT_MORE: the buffer has room for more, and the current file has
@@ -52,10 +78,16 @@ enum buffer_status_t populate_buffer ( char * path, char buffer [ BUFFER_SZ ],
 
         if ( ( bw = fread ( & ( buffer [ *idx ] ), sizeof ( char ),
                                         BUFFER_SZ - 1 - *idx, *fp ) )
-                        < BUFFER_SZ - 1 - *idx ) {
+                        < BUFFER_SZ - 1 ) {
                 *idx += bw;
-                buffer [ *idx + 1 ] = '\0';
-                if ( feof ( *fp ) ) {
+
+                if ( *idx == BUFFER_SZ - 1 ) {
+                        *idx = 0;
+                        return BUFSTAT_FULL;
+                }
+
+                buffer [ *idx ] = '\0';
+                if ( feof_stream ( *fp ) == 1 ) {
                         /* the buffer has not been filled because the
                          * file has no more bytes */
                         fnull ( fp );
@@ -69,16 +101,17 @@ enum buffer_status_t populate_buffer ( char * path, char buffer [ BUFFER_SZ ],
         }
 
         if ( bw == BUFFER_SZ - 1 ) {
-                *idx = 0;
-                if ( feof ( *fp ) ) {
+                if ( feof_stream ( *fp ) == 1 ) {
                         /* borderline case: the buffer has been filled, and the
                          * file has ended */
+                        *idx = 0;
                         fnull ( fp );
                         return BUFSTAT_BORDR;
                 }
 
                 /* the buffer has been filled, and there is still more in the
                  * current file */
+                *idx = 0;
                 return BUFSTAT_FULL;
         }
 
@@ -117,9 +150,7 @@ int main ( int argc, char ** argv )
                          * up a new file to pass for the next call to
                          * populate_buffer */
                         print_buffer ( buffer );
-                        puts ( KRED );
-                        puts ( "HIT BUFSTAT_FULL; SEARCH" );
-                        puts ( KNRM );
+                        puts ( "\n" KRED "HIT BUFSTAT_BORDR; SEARCH" KNRM );
                         if ( i + 1 <= argc ) {
                                 i++;
                                 path = argv [ i ];
@@ -129,9 +160,7 @@ int main ( int argc, char ** argv )
 
                 if ( status == BUFSTAT_MORE ) {
                         print_buffer ( buffer );
-                        puts ( KRED );
-                        puts ( "HIT BUFSTAT_MORE" );
-                        puts ( KNRM );
+                        puts ( "\n" KRED "HIT BUFSTAT_MORE" KNRM );
                         if ( i + 1 <= argc ) {
                                 i++;
                                 path = argv [ i ];
@@ -141,15 +170,11 @@ int main ( int argc, char ** argv )
 
                 if ( status == BUFSTAT_FULL ) {
                         print_buffer ( buffer );
-                        puts ( KRED );
-                        puts ( "HIT BUFSTAT_FULL; SEARCH" );
-                        puts ( KNRM );
+                        puts ( "\n" KRED "HIT BUFSTAT_FULL; SEARCH" KNRM );
                 }
         }
 
-        puts ( KRED );
-        puts ( "NO MORE FILES; SEARCH" );
-        puts ( KNRM );
+        puts ( "\n" KRED "NO MORE FILES; SEARCH" KNRM );
 
         /* ONLY SEARCH ON BUFSTAT_FULL, BUFSTAT_BORDR OR NO MORE FILES TO
          * PROCESS IN THE HYPOTHETICAL DIRECTORY. */
