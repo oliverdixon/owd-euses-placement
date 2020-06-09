@@ -10,9 +10,13 @@
 #include "euses.h"
 
 #define BUFFER_SZ ( 4096 )
+#define NOPUTS(str)
 
 #define ASCII_MIN ( 0x20 )
 #define ASCII_MAX ( 0x7E )
+
+#define KNRM "\x1B[0m"
+#define KRED "\x1B[31m"
 
 #define CONFIGROOT_ENVNAME "PORTAGE_CONFIGROOT"
 #define CONFIGROOT_SUFFIX  "/repos.conf/"
@@ -528,17 +532,36 @@ enum buffer_status_t populate_buffer ( char * path, char buffer [ BUFFER_SZ ],
         return BUFSTAT_DUMMY; /* appease compilers */
 }
 
+int request_new_desc_file ( struct repo_t * repo, DIR ** dp )
+{
+        enum dir_status_t dirstat = DIRSTAT_MORE;
+
+        if ( ( dirstat = find_next_desc_file ( repo->location, dp ) )
+                        == DIRSTAT_ERRNO ) {
+                free ( repo );
+                dnull ( dp );
+                return -1;
+        }
+
+        return ( dirstat == DIRSTAT_DONE );
+}
+
 /* search_files: search the *.{,local.}desc files in the repo `location`
  * directory to find any of the given needles. Once a repository's files have
- * completely been scanned, it is popped from the stack. */
+ * completely been scanned, it is popped from the stack.
+ *
+ * Can this function be split up ? I really dislike its ugliness currently. */
 
 enum status_t search_files ( struct repo_stack_t * stack, char ** needles )
 {
         struct repo_t * repo = NULL;
         char buffer [ BUFFER_SZ ];
-        enum dir_status_t dirstat = DIRSTAT_MORE;
+        int status = -1;
         unsigned int repo_base_len = 0;
         DIR * dp = NULL;
+        FILE * fp = NULL;
+        size_t idx = 0;
+        enum buffer_status_t bufstat = BUFSTAT_MORE;
 
         while ( ( repo = stack_pop ( stack ) ) != NULL ) {
                 if ( open_profiles_path ( repo->location, &dp ) == -1 ) {
@@ -548,20 +571,52 @@ enum status_t search_files ( struct repo_stack_t * stack, char ** needles )
                 }
 
                 repo_base_len = strlen ( repo->location );
-                while ( dirstat == DIRSTAT_MORE ) {
-                        if ( ( dirstat = find_next_desc_file ( repo->location,
-                                                        &dp ) )
-                                        == DIRSTAT_ERRNO ) {
+
+                for ( ; ; ) {
+                        if ( bufstat == BUFSTAT_BORDR
+                                        || bufstat == BUFSTAT_MORE ) {
+                                repo->location [ repo_base_len ] = '\0';
+                                if ( ( status = request_new_desc_file ( repo,
+                                                                &dp ) )
+                                                == -1 )
+                                        return STATUS_ERRNO;
+                                else if ( status == 1 )
+                                        break;
+
+                                NOPUTS ( "\n" KRED "NEW FILE: " );
+                                NOPUTS ( repo->location );
+                                NOPUTS ( KNRM );
+                        }
+
+                        bufstat = populate_buffer ( repo->location, buffer,
+                                        &fp, &idx );
+
+                        if ( bufstat == BUFSTAT_ERRNO ) {
+                                fputs ( strerror ( errno ), stderr );
                                 free ( repo );
                                 dnull ( &dp );
                                 return STATUS_ERRNO;
                         }
 
-                        if ( dirstat == DIRSTAT_DONE )
-                                break;
+                        if ( bufstat == BUFSTAT_BORDR ) {
+                                /* if borderline, do the same as BUFSTAT_FULL
+                                 * but queue up a new file to pass for the next
+                                 * call to populate_buffer */
+                                NOPUTS ( buffer );
+                                continue;
+                        }
 
-                        /* TODO: populate_buffer */
-                        repo->location [ repo_base_len ] = '\0';
+                        if ( bufstat == BUFSTAT_MORE ) {
+                                NOPUTS ( buffer );
+                                NOPUTS ( "\n" KRED "HIT BUFSTAT_MORE" KNRM );
+                                continue;
+                        }
+
+                        if ( bufstat == BUFSTAT_FULL ) {
+                                NOPUTS ( buffer );
+                                NOPUTS ( "\n" KRED "HIT BUFSTAT_FULL; SEARCH"
+                                                KNRM );
+                        }
                 }
 
                 free ( repo );
