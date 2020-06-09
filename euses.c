@@ -80,20 +80,24 @@ const char * provide_error ( enum status_t status )
         }
 }
 
-/* fnull: close and null a file pointer. */
+/* fnull: close and null a non-null file pointer. */
 
 static inline void fnull ( FILE ** fp )
 {
-        fclose ( *fp );
-        *fp = NULL;
+        if ( *fp != NULL ) {
+                fclose ( *fp );
+                *fp = NULL;
+        }
 }
 
-/* dnull: close and null a directory stream pointer. */
+/* dnull: close and null a non-null directory stream pointer. */
 
 static inline void dnull ( DIR ** dp )
 {
-        closedir ( *dp );
-        *dp = NULL;
+        if ( *dp != NULL ) {
+                closedir ( *dp );
+                *dp = NULL;
+        }
 }
 
 /* get_base_dir: populates `base` with the Portage configuration root (usually
@@ -306,6 +310,7 @@ enum status_t register_repo ( char base [ ], char * filename,
                 return STATUS_ERRNO;
 
         if ( ( len = strlen ( filename ) + strlen ( base ) ) >= PATH_MAX ) {
+                free ( repo );
                 errno = ENAMETOOLONG;
                 return STATUS_ERRNO;
         }
@@ -315,8 +320,10 @@ enum status_t register_repo ( char base [ ], char * filename,
         desc_path [ len ] = '\0';
 
         if ( ( status = parse_repo_description ( repo, desc_path ) )
-                        != STATUS_OK )
+                        != STATUS_OK ) {
+                free ( repo );
                 return status;
+        }
 
         repo->next = NULL;
         stack_push ( stack, repo );
@@ -396,7 +403,7 @@ enum dir_status_t find_next_desc_file ( char repo_base [ PATH_MAX ], DIR ** dp )
                 if ( ( dir = readdir ( *dp ) ) == NULL ) {
                         if ( errno != 0 )
                                 /* On reaching the end of the stream,
-                                 * errno is not changed. */
+                                 * errno has changed to indicate an error. */
                                 return DIRSTAT_ERRNO;
                         return DIRSTAT_DONE;
                 }
@@ -529,14 +536,34 @@ enum status_t search_files ( struct repo_stack_t * stack, char ** needles )
 {
         struct repo_t * repo = NULL;
         char buffer [ BUFFER_SZ ];
+        enum dir_status_t dirstat = DIRSTAT_MORE;
+        unsigned int repo_base_len = 0;
         DIR * dp = NULL;
 
         while ( ( repo = stack_pop ( stack ) ) != NULL ) {
-                if ( open_profiles_path ( repo->location, &dp ) == -1 )
+                if ( open_profiles_path ( repo->location, &dp ) == -1 ) {
+                        free ( repo );
+                        dnull ( &dp );
                         return STATUS_ERRNO;
+                }
 
-                /* TODO: populate_buffer here */
-                puts ( repo->location );
+                repo_base_len = strlen ( repo->location );
+                while ( dirstat == DIRSTAT_MORE ) {
+                        if ( ( dirstat = find_next_desc_file ( repo->location,
+                                                        &dp ) )
+                                        == DIRSTAT_ERRNO ) {
+                                free ( repo );
+                                dnull ( &dp );
+                                return STATUS_ERRNO;
+                        }
+
+                        if ( dirstat == DIRSTAT_DONE )
+                                break;
+
+                        /* TODO: populate_buffer */
+                        repo->location [ repo_base_len ] = '\0';
+                }
+
                 free ( repo );
                 dnull ( &dp );
         }
