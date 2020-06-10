@@ -14,7 +14,7 @@
 #define ASCII_MIN ( 0x20 )
 #define ASCII_MAX ( 0x7E )
 
-#define NOPUTS(str) puts ( str )
+#define NOPUTS(str)
 #define KNRM "\x1B[0m"
 #define KRED "\x1B[31m"
 
@@ -36,7 +36,8 @@ enum status_t {
         STATUS_ININME = -4, /* the ini file did not contain "[name]" */
         STATUS_INILOC = -5, /* the location attribute doesn't exist */
         STATUS_INILCS = -6, /* the location value exceeded PATH_MAX - 1 */ 
-        STATUS_INIEMP = -7  /* the repository-description file was empty */ 
+        STATUS_INIEMP = -7, /* the repository-description file was empty */ 
+        STATUS_BADARG = -8  /* inadequate arguments were provided */
 };
 
 enum dir_status_t {
@@ -87,6 +88,8 @@ static const char * provide_error ( enum status_t status )
                                         "attribute.";
                 case STATUS_INILCS: return "A repository-description file" \
                                         "contains an unwieldy location value.";
+                case STATUS_BADARG: return "Inadequate command-line arguments" \
+                                        " were provided.";
 
                 default: return "Unknown error";
         }
@@ -576,6 +579,33 @@ static void init_buffer_instance ( struct buffer_info_t * b_inf )
         b_inf->status = BUFSTAT_MORE;
 }
 
+/* stop_at_newline: TODO */
+
+static void stop_at_newline ( char * str ) 
+{
+        char * pos = strchr ( str, '\n' );
+
+        if ( pos == NULL )
+                return;
+
+        str [ pos - str ] = '\0';
+}
+
+/* search_buffer: TODO */
+
+static void search_buffer ( char buffer [ BUFFER_SZ ], char ** needles,
+                int ncount, struct repo_t * repo )
+{
+        char * ptr = NULL;
+
+        for ( int i = 0; i < ncount; i++ )
+                if ( ( ptr = strstr ( buffer, needles [ 0 ] ) ) != NULL ) {
+                        stop_at_newline ( ptr );
+                        printf ( "%s (::%s => %s)\n", ptr, repo->name,
+                                        repo->location );
+                }
+}
+
 /* search_files: search the *.{,local.}desc files in the repo `location`
  * directory to find any of the given needles. Once a repository's files have
  * completely been scanned, it is popped from the stack.
@@ -583,7 +613,7 @@ static void init_buffer_instance ( struct buffer_info_t * b_inf )
  * Can this function be split up ? I really dislike its ugliness currently. */
 
 static enum status_t search_files ( struct repo_stack_t * stack,
-                char ** needles )
+                char ** needles, int ncount )
 {
         struct repo_t * repo = NULL;
         enum dir_status_t dirstat = -1;
@@ -636,24 +666,35 @@ static enum status_t search_files ( struct repo_stack_t * stack,
                                         NOPUTS ( "\n" KRED "HIT " \
                                                         "BUFSTAT_FULL; SEARCH"
                                                         KNRM );
+                                        search_buffer ( bi.buffer, needles,
+                                                        ncount, repo );
                                         break;
                         }
                 }
+
+                NOPUTS ( "\n" KRED "NO MORE FILES IN REPO; SEARCH (IF NOT " \
+                                "BUFSTAT_BORDR)" KNRM );
+                if ( bi.status != BUFSTAT_BORDR )
+                        search_buffer ( bi.buffer, needles, ncount, repo );
 
                 free ( repo );
                 dnull ( &dp );
         }
 
-        NOPUTS ( "\n" KRED "NO MORE FILES; SEARCH (IF NOT BUFSTAT_BORDR)"
-                        KNRM );
         return STATUS_OK;
 }
 
-int main ( )
+int main ( int argc, char ** argv )
 {
         char base [ PATH_MAX ];
         struct repo_stack_t repo_stack;
         enum status_t status = STATUS_OK;
+
+        if ( argc < 2 ) {
+                fputs ( provide_error ( STATUS_BADARG ), stderr );
+                fputc ( '\n', stderr );
+                return EXIT_FAILURE;
+        }
 
         stack_init ( &repo_stack );
 
@@ -672,7 +713,8 @@ int main ( )
 
         /* TODO: split main to allow direct-printing to stderr, possibly with an
          * optional prefix. */
-        if ( ( status = search_files ( &repo_stack, NULL ) ) != STATUS_OK ) {
+        if ( ( status = search_files ( &repo_stack, & ( argv [ 1 ] ),
+                                        argc - 1 ) ) != STATUS_OK ) {
                 fputs ( "Could not load the USE-description files:\n\t",
                                 stderr );
                 fputs ( provide_error ( status ), stderr );
