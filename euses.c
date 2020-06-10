@@ -52,18 +52,26 @@ enum buffer_status_t {
         BUFSTAT_ERRNO = -1  /* an error occurred in fread/fopen; c.f. errno */
 };
 
+/* buffer_info_t should be kept persistent by the caller, for use by functions
+ * directly modifying the trans-directory and trans-file buffer. This is a
+ * spurious attempt to eliminate the need for static variables inside the
+ * buffered reader functions, thus ensuring thread-safety in all cases, should
+ * such a need arise. Multiple instances of a buffer-directory set can also be
+ * maintained simultaneously, regardless of the threading style. We don't need
+ * another strtok(_r) situation. */
+
 struct buffer_info_t {
-        FILE * fp;
-        size_t idx;
-        enum buffer_status_t status;
-        char buffer [ BUFFER_SZ ];
+        FILE * fp; /* the file currently being read */
+        size_t idx; /* the index into the current buffer; DO NOT TOUCH */
+        enum buffer_status_t status; /* for the caller: status of the reader */
+        char buffer [ BUFFER_SZ ]; /* buffer, assumed to be of size BUFFER_SZ */
 };
 
 /* provide_error: returns a human-readable string representing an error code, as
  * enumerated in status_t. If the passed code is STATUS_ERRNO, the strerror
  * function is used with the current value of errno. */
 
-const char * provide_error ( enum status_t status )
+static const char * provide_error ( enum status_t status )
 {
         switch ( status ) {
                 case STATUS_OK:     return "Everything is OK.";
@@ -110,7 +118,7 @@ static inline void dnull ( DIR ** dp )
  * files. If -1 is returned, the base path would exceed the limit defined by
  * PATH_MAX; errno is set appropriately. */
 
-enum status_t get_base_dir ( char base [ PATH_MAX ] )
+static enum status_t get_base_dir ( char base [ PATH_MAX ] )
 {
         char * base_ptr = NULL;
 
@@ -133,8 +141,8 @@ enum status_t get_base_dir ( char base [ PATH_MAX ] )
  * name exceeds NAME_MAX. The `offset` value is set to the address of the
  * character in the buffer immediately succeeding the closing ']'. */
 
-enum status_t ini_get_name ( char name [ NAME_MAX ], char buffer [ BUFFER_SZ ],
-                int * offset )
+static enum status_t ini_get_name ( char name [ NAME_MAX ],
+                char buffer [ BUFFER_SZ ], int * offset )
 {
         char * start = NULL, * end = NULL, * buffer_in = buffer;
 
@@ -167,7 +175,7 @@ enum status_t ini_get_name ( char name [ NAME_MAX ], char buffer [ BUFFER_SZ ],
  * of the next non-whitespace character. If a null-terminator appears before a
  * non-whitespace character is found, NULL is returned. */
 
-char * skip_whitespace ( char * str )
+static char * skip_whitespace ( char * str )
 {
         for ( unsigned int i = 0; ; i++ )
                 switch ( str [ i ] ) {
@@ -188,7 +196,7 @@ char * skip_whitespace ( char * str )
  * writes the appropriate value into the `location` string. On failure,
  * STATUS_INILOC is returned. */
 
-enum status_t ini_get_location ( char location [ PATH_MAX ],
+static enum status_t ini_get_location ( char location [ PATH_MAX ],
                 char buffer [ BUFFER_SZ ] )
 {
         const char * key = "location";
@@ -233,7 +241,7 @@ enum status_t ini_get_location ( char location [ PATH_MAX ],
  * STATUS_ERRNO (with errno set appropriately), or STATUS_DCLONG is returned. If
  * the file is empty, STATUS_INIEMP is returned. */
 
-enum status_t buffer_repo_description ( char path [ ],
+static enum status_t buffer_repo_description ( char path [ ],
                 char buffer [ BUFFER_SZ ] )
 {
         FILE * fp = fopen ( path, "r" );
@@ -280,7 +288,7 @@ enum status_t buffer_repo_description ( char path [ ],
  * repository-description file exceeds the generous amount as provided by the
  * buffer, STATUS_DCLONG is returned. */
 
-enum status_t parse_repo_description ( struct repo_t * repo,
+static enum status_t parse_repo_description ( struct repo_t * repo,
                 char desc_path [ ] )
 {
         char buffer [ BUFFER_SZ ];
@@ -305,7 +313,7 @@ enum status_t parse_repo_description ( struct repo_t * repo,
  * allocate enough memory, errno is set appropriately and STATUS_ERRNO is
  * returned. On success, STATUS_OK is returned. */
 
-enum status_t register_repo ( char base [ ], char * filename,
+static enum status_t register_repo ( char base [ ], char * filename,
                 struct repo_stack_t * stack )
 {
         struct repo_t * repo = malloc ( sizeof ( struct repo_t ) );
@@ -346,7 +354,7 @@ enum status_t register_repo ( char base [ ], char * filename,
  *
  * https://wiki.gentoo.org/wiki//etc/portage/repos.conf#Format */
 
-enum status_t enumerate_repo_descriptions ( char base [ ],
+static enum status_t enumerate_repo_descriptions ( char base [ ],
                 struct repo_stack_t * stack )
 {
         DIR * dp = NULL;
@@ -382,7 +390,7 @@ enum status_t enumerate_repo_descriptions ( char base [ ],
  * null-terminator---of the given string. If the string does not contain '.',
  * or it is immediately followed by a null-terminator, NULL is returned. */
 
-char * get_file_ext ( const char * filename )
+static char * get_file_ext ( const char * filename )
 {
         char * ext = strrchr ( filename, '.' );
         return ( ext == NULL || * ( ext++ ) == '\0' ) ? NULL : ext;
@@ -400,7 +408,8 @@ char * get_file_ext ( const char * filename )
  * repository base path due to length, errno is set appropriately and
  * DIRSTAT_ERRNO is returned. */
 
-enum dir_status_t find_next_desc_file ( char repo_base [ PATH_MAX ], DIR ** dp )
+static enum dir_status_t find_next_desc_file ( char repo_base [ PATH_MAX ],
+                DIR ** dp )
 {
         struct dirent * dir = NULL;
         char * ext = NULL;
@@ -435,7 +444,7 @@ enum dir_status_t find_next_desc_file ( char repo_base [ PATH_MAX ], DIR ** dp )
  * zero, the caller must clean-up the opendir call, otherwise, -1 on failure.
  * This only needs to be called once-per-repository. */
 
-int open_profiles_path ( char path [ PATH_MAX ], DIR ** dp )
+static int open_profiles_path ( char path [ PATH_MAX ], DIR ** dp )
 {
         if ( strlen ( PROFILES_SUFFIX ) + strlen ( path ) >= PATH_MAX ) {
                 errno = ENAMETOOLONG;
@@ -454,7 +463,7 @@ int open_profiles_path ( char path [ PATH_MAX ], DIR ** dp )
  * has not reached the end, and 1 if the inverse is true. In any case, the file
  * cursor is reverted to its previous state. */
 
-int feof_stream ( FILE * fp )
+static int feof_stream ( FILE * fp )
 {
         long pos = 0, len = 0;
 
@@ -472,7 +481,7 @@ int feof_stream ( FILE * fp )
         return ( pos == len );
 }
 
-/* populate_buffer: assuming the `fp` file pointer remains persistent and
+/* populate_buffer: assuming the buffer_info_t structure remains persistent and
  * unmodified by the caller, this function loads a file, provided by `path` into
  * the given buffer of BUFFER_SZ. If the buffer is filled, BUFSTAT_FULL or
  * BUFSTAT_BORDR is returned, dependent upon the position of the file cursor; if
@@ -480,11 +489,9 @@ int feof_stream ( FILE * fp )
  * returned. If the buffer has not been filled due to a lack of bytes in the
  * file, BUFSTAT_MORE is returned, and the next call to this function should
  * contain a new path. If the file cannot be opened or read, BUFSTAT_ERRNO is
- * returned, and the caller must confer with errno. `idx` stores the next
- * writeable index of the buffer, and should be kept persistent and unchanged by
- * the caller. */
+ * returned, and the caller must confer with errno. */
 
-enum buffer_status_t populate_buffer ( char * path,
+static enum buffer_status_t populate_buffer ( char * path,
                 struct buffer_info_t * b_inf )
 {
         size_t bw = 0;
@@ -540,10 +547,12 @@ enum buffer_status_t populate_buffer ( char * path,
 
 /* request_new_desc_file: small wrapper function for find_next_desc_file,
  * freeing the passed objects on failure. The caller should confer with errno on
- * the event that -1 is returned. On success, this function returns zero or one,
- * dependent on the status of the directory stream (exhausted ?). */
+ * the event that DIRSTAT_ERRNO is returned. On success, this function returns
+ * DIRSTAT_FULL or DIRSTAT_MORE, dependent on the status of the directory stream
+ * (exhausted ?). */
 
-enum dir_status_t request_new_desc_file ( struct repo_t * repo, DIR ** dp )
+static enum dir_status_t request_new_desc_file ( struct repo_t * repo,
+                DIR ** dp )
 {
         enum dir_status_t dirstat = DIRSTAT_MORE;
 
@@ -560,7 +569,7 @@ enum dir_status_t request_new_desc_file ( struct repo_t * repo, DIR ** dp )
 /* init_buffer_instance: initialise a buffer_info_t structure with default
  * values. */
 
-void init_buffer_instance ( struct buffer_info_t * b_inf )
+static void init_buffer_instance ( struct buffer_info_t * b_inf )
 {
         b_inf->fp = NULL;
         b_inf->idx = 0;
@@ -573,7 +582,8 @@ void init_buffer_instance ( struct buffer_info_t * b_inf )
  *
  * Can this function be split up ? I really dislike its ugliness currently. */
 
-enum status_t search_files ( struct repo_stack_t * stack, char ** needles )
+static enum status_t search_files ( struct repo_stack_t * stack,
+                char ** needles )
 {
         struct repo_t * repo = NULL;
         enum dir_status_t dirstat = -1;
