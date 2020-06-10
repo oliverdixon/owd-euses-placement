@@ -11,6 +11,7 @@
 #include "euses.h"
 
 #define BUFFER_SZ ( 4096 )
+#define QUERY_MAX ( 256 )
 
 #define ASCII_MIN ( 0x20 )
 #define ASCII_MAX ( 0x7E )
@@ -576,8 +577,15 @@ static void init_buffer_instance ( struct buffer_info_t * b_inf )
         b_inf->status = BUFSTAT_MORE;
 }
 
-/* find_line_bounds: TODO
- * This function needs more testing for the slightly peculiar cases. */
+/* find_line_bounds: find the previous '\n', and the next '\n', and return an
+ * accordingly null-terminated version of buffer_start, using substr_start as a
+ * point of reference. `marker` is then set as the end of the current buffer, to
+ * avoid getting stuck in an infinite loop (this should be reset by the relevant
+ * caller(s) every time a new needle/search term is sought). This function
+ * returns the start of the appropriately null-terminated line. If the entry is
+ * poorly formatted, NULL is returned.
+ *
+ * TODO: This function needs more testing for the slightly peculiar cases. */
 
 static char * find_line_bounds ( char * buffer_start, char * substr_start,
                 char ** marker ) 
@@ -591,6 +599,7 @@ static char * find_line_bounds ( char * buffer_start, char * substr_start,
 
         if ( ( start = strrchr ( buffer_start, '\n' ) ) == NULL
                         || * ( start++ ) == '\0' ) {
+                /* the entry is not legitimate/poorly formatted */
                 buffer_start [ key_idx ] = tmp;
                 return NULL;
         }
@@ -604,28 +613,65 @@ static char * find_line_bounds ( char * buffer_start, char * substr_start,
         return start;
 }
 
-/* search_buffer: TODO */
+/* search_buffer: search the `buffer` for the provided `needles`, of which there
+ * are `ncount`. This function searches and prints the results as soon as they
+ * are found, and, providing uninterrupted execution, exits with `buffer`
+ * unchanged. TODO: investigate the advantages of strstr(3) alternative
+ * implementations, such as Boyer-Moore. */
 
 static void search_buffer ( char buffer [ BUFFER_SZ ], char ** needles,
                 int ncount, struct repo_t * repo )
 {
-        char * ptr = NULL;
+        char * ptr = NULL, query [ QUERY_MAX ], * buffer_start = buffer;
+        size_t len = 0;
 
-        for ( int i = 0; i < ncount; i++ )
-                if ( ( ptr = strstr ( buffer, needles [ 0 ] ) ) != NULL ) {
-                        ptr = find_line_bounds ( buffer, ptr, &buffer );
+        for ( int i = 0; i < ncount; i++ ) {
+                buffer = buffer_start;
+
+                if ( ( len = strlen ( needles [ i ] ) + 3 ) >= QUERY_MAX ) {
+                        fprintf ( stderr, "<%s is too long; skipping>\n",
+                                        needles [ i ] );
+                        continue;
+                }
+
+                /* This should probably be an option: "strict" ?
+                 * Otherwise, just pass the raw needle into strstr. */
+                strcpy ( query, needles [ i ] );
+                strcat ( query, " - " );
+                query [ len - 1 ] = '\0';
+
+                if ( ( ptr = strstr ( buffer, query ) ) != NULL ) {
+                        if ( ( ptr = find_line_bounds ( buffer, ptr, &buffer ) )
+                                        == NULL )
+                                break;
+
+                        /* TODO: provide printing the repo as a command-line
+                         * option: "verbose" ? */
                         printf ( "%s\n\t(::%s => %s)\n", ptr, repo->name,
                                         repo->location );
 
                         if ( buffer == NULL )
                                 break; /* end of buffer; see `marker` */
+
+                        /* undo the terminator added by find_line_bounds */
+                        ptr [ buffer - ptr ] = '\n';
                 }
+        }
 }
 
 /* search_files: search the *.{,local.}desc files in the repo `location`
  * directory to find any of the given needles. Once a repository's files have
- * completely been scanned, it is popped from the stack. TODO: add more
- * information here. */
+ * completely been scanned, it is popped from the stack and freed. This function
+ * manages the buffering and searching of the files in a recursive (call-stack)
+ * manner, and passes errors down the chain to the caller; all errors are
+ * reduced to be of the type status_t, allowing for the safe use of
+ * provide_error.
+ *
+ * TODO: this function, along with enumerate_repo_description, relies upon the
+ * d_type field of the dirent structure, which is not recognised in strict
+ * standards-compliance mode. This isn't particularly a "big deal", as it is
+ * very widely supported, however I would like to eradicate its use if there's
+ * an easier way to detect the nature of results from readdir(3). */
 
 static enum status_t search_files ( struct repo_stack_t * stack,
                 char ** needles, int ncount )
