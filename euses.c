@@ -9,6 +9,7 @@
 #include <assert.h>
 
 #include "euses.h"
+#include "args.h"
 
 #define BUFFER_SZ ( 4096 )
 #define QUERY_MAX ( 256 )
@@ -86,6 +87,18 @@ static const char * provide_error ( enum status_t status )
 
                 default: return "Unknown error";
         }
+}
+
+/* print_version_info: uses the various PROGRAM_* definitions to print
+ * program information to stdout. */
+
+static inline void print_version_info ( )
+{
+        puts ( "This is " PROGRAM_NAME ", v. " PROGRAM_VERSION " by "
+                        PROGRAM_AUTHOR " (" PROGRAM_YEAR
+                        ").\n\nThis code is licensed under the "
+                        PROGRAM_LICENCE_NAME ",\nthe details of which " \
+                        "can be found at " PROGRAM_LICENCE_URL ".\n" );
 }
 
 /* fnull: close and null a non-null file pointer. */
@@ -734,13 +747,14 @@ int main ( int argc, char ** argv )
         struct repo_stack_t repo_stack;
         enum status_t status = STATUS_OK;
 
-        if ( argc < 2 ) {
+        if ( argc < 2 || process_args ( argc, argv ) == -1 ) {
                 fputs ( provide_error ( STATUS_BADARG ), stderr );
                 fputc ( '\n', stderr );
                 return EXIT_FAILURE;
         }
 
         stack_init ( &repo_stack );
+        print_version_info ( ); /* TODO: this should be a command-line option */
 
         if ( ( status = get_base_dir ( base ) != STATUS_OK ) ||
                         ( status = enumerate_repo_descriptions ( base,
@@ -753,7 +767,7 @@ int main ( int argc, char ** argv )
                 return EXIT_FAILURE;
         }
 
-        stack_print ( &repo_stack );
+        stack_print ( &repo_stack ); /* TODO: this should also be optional */
         putchar ( '\n' );
 
         /* TODO: split main to allow direct-printing to stderr, possibly with an
