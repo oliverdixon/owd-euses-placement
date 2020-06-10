@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <dirent.h>
+#include <assert.h>
 
 #include "euses.h"
 
@@ -13,10 +14,6 @@
 
 #define ASCII_MIN ( 0x20 )
 #define ASCII_MAX ( 0x7E )
-
-#define NOPUTS(str)
-#define KNRM "\x1B[0m"
-#define KRED "\x1B[31m"
 
 #define CONFIGROOT_ENVNAME "PORTAGE_CONFIGROOT"
 #define CONFIGROOT_SUFFIX  "/repos.conf/"
@@ -579,16 +576,32 @@ static void init_buffer_instance ( struct buffer_info_t * b_inf )
         b_inf->status = BUFSTAT_MORE;
 }
 
-/* stop_at_newline: TODO */
+/* find_line_bounds: TODO
+ * This function needs more testing for the slightly peculiar cases. */
 
-static void stop_at_newline ( char * str ) 
+static char * find_line_bounds ( char * buffer_start, char * substr_start,
+                char ** marker ) 
 {
-        char * pos = strchr ( str, '\n' );
+        char tmp = '\0', * start = NULL, * end = NULL;
+        long key_idx = substr_start - buffer_start;
 
-        if ( pos == NULL )
-                return;
+        assert ( key_idx >= 0 );
+        tmp = buffer_start [ key_idx ];
+        buffer_start [ key_idx ] = '\0';
 
-        str [ pos - str ] = '\0';
+        if ( ( start = strrchr ( buffer_start, '\n' ) ) == NULL
+                        || * ( start++ ) == '\0' ) {
+                buffer_start [ key_idx ] = tmp;
+                return NULL;
+        }
+
+        buffer_start [ key_idx ] = tmp;
+
+        end = strchr ( substr_start, '\n' );
+        substr_start [ end - substr_start ] = '\0';
+        *marker = end; /* marker is set to NULL if there's no closing newline */
+
+        return start;
 }
 
 /* search_buffer: TODO */
@@ -600,17 +613,19 @@ static void search_buffer ( char buffer [ BUFFER_SZ ], char ** needles,
 
         for ( int i = 0; i < ncount; i++ )
                 if ( ( ptr = strstr ( buffer, needles [ 0 ] ) ) != NULL ) {
-                        stop_at_newline ( ptr );
-                        printf ( "%s (::%s => %s)\n", ptr, repo->name,
+                        ptr = find_line_bounds ( buffer, ptr, &buffer );
+                        printf ( "%s\n\t(::%s => %s)\n", ptr, repo->name,
                                         repo->location );
+
+                        if ( buffer == NULL )
+                                break; /* end of buffer; see `marker` */
                 }
 }
 
 /* search_files: search the *.{,local.}desc files in the repo `location`
  * directory to find any of the given needles. Once a repository's files have
- * completely been scanned, it is popped from the stack.
- *
- * Can this function be split up ? I really dislike its ugliness currently. */
+ * completely been scanned, it is popped from the stack. TODO: add more
+ * information here. */
 
 static enum status_t search_files ( struct repo_stack_t * stack,
                 char ** needles, int ncount )
@@ -632,6 +647,7 @@ static enum status_t search_files ( struct repo_stack_t * stack,
 
                 repo_base_len = strlen ( repo->location );
 
+                /* Is a self-breaking infinite loop the best way to do this ? */
                 for ( ; ; ) {
                         if ( bi.status == BUFSTAT_BORDR
                                         || bi.status == BUFSTAT_MORE ) {
@@ -642,10 +658,6 @@ static enum status_t search_files ( struct repo_stack_t * stack,
                                         return STATUS_ERRNO;
                                 else if ( dirstat == DIRSTAT_DONE )
                                         break; /* no more files in this repo */
-
-                                NOPUTS ( "\n" KRED "NEW FILE: " );
-                                NOPUTS ( repo->location );
-                                NOPUTS ( KNRM );
                         }
 
                         switch ( bi.status = populate_buffer ( repo->location,
@@ -657,23 +669,14 @@ static enum status_t search_files ( struct repo_stack_t * stack,
                                         return STATUS_ERRNO;
                                 case BUFSTAT_BORDR:
                                 case BUFSTAT_MORE:
-                                        NOPUTS ( bi.buffer );
-                                        NOPUTS ( "\n" KRED "HIT BUFSTAT_MORE"
-                                                        KNRM );
                                         break;
                                 case BUFSTAT_FULL:
-                                        NOPUTS ( bi.buffer );
-                                        NOPUTS ( "\n" KRED "HIT " \
-                                                        "BUFSTAT_FULL; SEARCH"
-                                                        KNRM );
                                         search_buffer ( bi.buffer, needles,
                                                         ncount, repo );
                                         break;
                         }
                 }
 
-                NOPUTS ( "\n" KRED "NO MORE FILES IN REPO; SEARCH (IF NOT " \
-                                "BUFSTAT_BORDR)" KNRM );
                 if ( bi.status != BUFSTAT_BORDR )
                         search_buffer ( bi.buffer, needles, ncount, repo );
 
@@ -710,6 +713,7 @@ int main ( int argc, char ** argv )
         }
 
         stack_print ( &repo_stack );
+        putchar ( '\n' );
 
         /* TODO: split main to allow direct-printing to stderr, possibly with an
          * optional prefix. */

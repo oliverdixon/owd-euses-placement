@@ -72,7 +72,7 @@ void stack_print ( struct repo_stack_t * stack )
         }
 
         do {
-                printf ( "Name: %-5s\tLocation: %-16s\n", repo->name,
+                printf ( "Name: %-10s\tLocation: %-16s\n", repo->name,
                                 repo->location );
         } while ( ( repo = repo->next ) != NULL );
 }
