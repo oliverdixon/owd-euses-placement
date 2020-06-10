@@ -10,11 +10,11 @@
 #include "euses.h"
 
 #define BUFFER_SZ ( 4096 )
-#define NOPUTS(str)
 
 #define ASCII_MIN ( 0x20 )
 #define ASCII_MAX ( 0x7E )
 
+#define NOPUTS(str) puts ( str )
 #define KNRM "\x1B[0m"
 #define KRED "\x1B[31m"
 
@@ -33,12 +33,10 @@ enum status_t {
         STATUS_ERRNO  = -1, /* c.f. perror or strerror on errno */
         STATUS_NOREPO = -2, /* no repository-description files were found */
         STATUS_NOGENR = -3, /* no gentoo.conf repository-description file */
-        STATUS_DCLONG = -4, /* the description file is unusually long */
-        STATUS_ININME = -5, /* the ini file did not contain "[name]" */
-        STATUS_ININML = -6, /* the name in the ini file exceeded NAME_MAX */
-        STATUS_INILOC = -7, /* the location attribute doesn't exist */
-        STATUS_INILCS = -8, /* the location value exceeded PATH_MAX - 1 */ 
-        STATUS_INIEMP = -9  /* the repository-description file was empty */ 
+        STATUS_ININME = -4, /* the ini file did not contain "[name]" */
+        STATUS_INILOC = -5, /* the location attribute doesn't exist */
+        STATUS_INILCS = -6, /* the location value exceeded PATH_MAX - 1 */ 
+        STATUS_INIEMP = -7  /* the repository-description file was empty */ 
 };
 
 enum dir_status_t {
@@ -48,11 +46,17 @@ enum dir_status_t {
 };
 
 enum buffer_status_t {
-        BUFSTAT_DUMMY =  3, /* no-op; will never be returned */
         BUFSTAT_BORDR =  2, /* the buffer is full and the file is fully read */
         BUFSTAT_MORE  =  1, /* the file has been buffered; room for more */
         BUFSTAT_FULL  =  0, /* part of the file has been buffered; it is full */
         BUFSTAT_ERRNO = -1  /* an error occurred in fread/fopen; c.f. errno */
+};
+
+struct buffer_info_t {
+        FILE * fp;
+        size_t idx;
+        enum buffer_status_t status;
+        char buffer [ BUFFER_SZ ];
 };
 
 /* provide_error: returns a human-readable string representing an error code, as
@@ -67,13 +71,9 @@ const char * provide_error ( enum status_t status )
                 case STATUS_NOREPO: return "No repository-description files " \
                                         "were found.";
                 case STATUS_NOGENR: return "gentoo.conf does not exist.";
-                case STATUS_DCLONG: return "A repository-description file " \
-                                        "is unusually voluminous.";
                 case STATUS_ININME: return "A repository-description does " \
                                         "not contain a [name] clause at the" \
                                         " first opportunity.";
-                case STATUS_ININML: return "A repository-description file " \
-                                        "contains an unwieldy section name.";
                 case STATUS_INILOC: return "A repository-description file " \
                                         "does not contain the location " \
                                         "attribute.";
@@ -153,8 +153,10 @@ enum status_t ini_get_name ( char name [ NAME_MAX ], char buffer [ BUFFER_SZ ],
                 buffer = end + 1;
         } while ( strcmp ( start, "DEFAULT" ) == 0 );
 
-        if ( strlen ( start ) > NAME_MAX )
-                return STATUS_ININML;
+        if ( strlen ( start ) > NAME_MAX ) {
+                errno = ENAMETOOLONG;
+                return STATUS_ERRNO;
+        }
 
         *offset = ( end + 1 ) - buffer_in;
         strcpy ( name, start );
@@ -251,7 +253,8 @@ enum status_t buffer_repo_description ( char path [ ],
         if ( f_len >= BUFFER_SZ ) {
                 /* the repository-description file would not fit the buffer */
                 fclose ( fp );
-                return STATUS_DCLONG;
+                errno = EFBIG;
+                return STATUS_ERRNO;
         }
 
         if ( f_len == 0 ) {
@@ -481,46 +484,48 @@ int feof_stream ( FILE * fp )
  * writeable index of the buffer, and should be kept persistent and unchanged by
  * the caller. */
 
-enum buffer_status_t populate_buffer ( char * path, char buffer [ BUFFER_SZ ],
-                FILE ** fp, size_t * idx )
+enum buffer_status_t populate_buffer ( char * path,
+                struct buffer_info_t * b_inf )
 {
         size_t bw = 0;
 
         /* ensure the buffer is null-terminated */
-        buffer [ BUFFER_SZ - 1 ] = '\0';
+        b_inf->buffer [ BUFFER_SZ - 1 ] = '\0';
 
-        if ( *fp == NULL && ( *fp = fopen ( path, "r" ) ) == NULL )
+        if ( b_inf->fp == NULL && ( b_inf->fp = fopen ( path, "r" ) ) == NULL )
                 return BUFSTAT_ERRNO; /* the file cannot be opened */
 
-        if ( ( bw = fread ( & ( buffer [ *idx ] ), sizeof ( char ),
-                                        BUFFER_SZ - 1 - *idx, *fp ) )
+        if ( ( bw = fread ( & ( b_inf->buffer [ b_inf->idx ] ),
+                                        sizeof ( char ),
+                                        BUFFER_SZ - 1 - b_inf->idx,
+                                        b_inf->fp ) )
                         < BUFFER_SZ - 1 ) {
-                if ( ( *idx += bw ) == BUFFER_SZ - 1 ) {
-                        *idx = 0;
+                if ( ( b_inf->idx += bw ) == BUFFER_SZ - 1 ) {
+                        b_inf->idx = 0;
                         return BUFSTAT_FULL;
                 }
 
-                buffer [ *idx ] = '\0';
-                if ( feof_stream ( *fp ) == 1 ) {
+                b_inf->buffer [ b_inf->idx ] = '\0';
+                if ( feof_stream ( b_inf->fp ) == 1 ) {
                         /* the buffer has not been filled because the
                          * file has no more bytes */
-                        fnull ( fp );
+                        fnull ( & ( b_inf->fp ) );
                         return BUFSTAT_MORE;
                 }
 
                 /* the buffer has not been filled because there was an error
                  * with fread, the details of which were written to errno */
-                fnull ( fp );
+                fnull ( & ( b_inf->fp ) );
                 return BUFSTAT_ERRNO;
         }
 
         if ( bw == BUFFER_SZ - 1 ) {
-                *idx = 0;
+                b_inf->idx = 0;
 
-                if ( feof_stream ( *fp ) == 1 ) {
+                if ( feof_stream ( b_inf->fp ) == 1 ) {
                         /* borderline case: the buffer has been filled, and the
                          * file has ended */
-                        fnull ( fp );
+                        fnull ( & ( b_inf->fp ) );
                         return BUFSTAT_BORDR;
                 }
 
@@ -529,10 +534,16 @@ enum buffer_status_t populate_buffer ( char * path, char buffer [ BUFFER_SZ ],
                 return BUFSTAT_FULL;
         }
 
-        return BUFSTAT_DUMMY; /* appease compilers */
+        errno = ENOSYS; /* appease compilers; this should never occur */
+        return BUFSTAT_ERRNO;
 }
 
-int request_new_desc_file ( struct repo_t * repo, DIR ** dp )
+/* request_new_desc_file: small wrapper function for find_next_desc_file,
+ * freeing the passed objects on failure. The caller should confer with errno on
+ * the event that -1 is returned. On success, this function returns zero or one,
+ * dependent on the status of the directory stream (exhausted ?). */
+
+enum dir_status_t request_new_desc_file ( struct repo_t * repo, DIR ** dp )
 {
         enum dir_status_t dirstat = DIRSTAT_MORE;
 
@@ -540,10 +551,20 @@ int request_new_desc_file ( struct repo_t * repo, DIR ** dp )
                         == DIRSTAT_ERRNO ) {
                 free ( repo );
                 dnull ( dp );
-                return -1;
+                return DIRSTAT_ERRNO;
         }
 
-        return ( dirstat == DIRSTAT_DONE );
+        return dirstat;
+}
+
+/* init_buffer_instance: initialise a buffer_info_t structure with default
+ * values. */
+
+void init_buffer_instance ( struct buffer_info_t * b_inf )
+{
+        b_inf->fp = NULL;
+        b_inf->idx = 0;
+        b_inf->status = BUFSTAT_MORE;
 }
 
 /* search_files: search the *.{,local.}desc files in the repo `location`
@@ -555,13 +576,12 @@ int request_new_desc_file ( struct repo_t * repo, DIR ** dp )
 enum status_t search_files ( struct repo_stack_t * stack, char ** needles )
 {
         struct repo_t * repo = NULL;
-        char buffer [ BUFFER_SZ ];
-        int status = -1;
+        enum dir_status_t dirstat = -1;
         unsigned int repo_base_len = 0;
         DIR * dp = NULL;
-        FILE * fp = NULL;
-        size_t idx = 0;
-        enum buffer_status_t bufstat = BUFSTAT_MORE;
+        struct buffer_info_t bi;
+
+        init_buffer_instance ( &bi );
 
         while ( ( repo = stack_pop ( stack ) ) != NULL ) {
                 if ( open_profiles_path ( repo->location, &dp ) == -1 ) {
@@ -573,49 +593,40 @@ enum status_t search_files ( struct repo_stack_t * stack, char ** needles )
                 repo_base_len = strlen ( repo->location );
 
                 for ( ; ; ) {
-                        if ( bufstat == BUFSTAT_BORDR
-                                        || bufstat == BUFSTAT_MORE ) {
+                        if ( bi.status == BUFSTAT_BORDR
+                                        || bi.status == BUFSTAT_MORE ) {
                                 repo->location [ repo_base_len ] = '\0';
-                                if ( ( status = request_new_desc_file ( repo,
+                                if ( ( dirstat = request_new_desc_file ( repo,
                                                                 &dp ) )
-                                                == -1 )
+                                                == DIRSTAT_ERRNO )
                                         return STATUS_ERRNO;
-                                else if ( status == 1 )
-                                        break;
+                                else if ( dirstat == DIRSTAT_DONE )
+                                        break; /* no more files in this repo */
 
                                 NOPUTS ( "\n" KRED "NEW FILE: " );
                                 NOPUTS ( repo->location );
                                 NOPUTS ( KNRM );
                         }
 
-                        bufstat = populate_buffer ( repo->location, buffer,
-                                        &fp, &idx );
-
-                        if ( bufstat == BUFSTAT_ERRNO ) {
-                                fputs ( strerror ( errno ), stderr );
-                                free ( repo );
-                                dnull ( &dp );
-                                return STATUS_ERRNO;
-                        }
-
-                        if ( bufstat == BUFSTAT_BORDR ) {
-                                /* if borderline, do the same as BUFSTAT_FULL
-                                 * but queue up a new file to pass for the next
-                                 * call to populate_buffer */
-                                NOPUTS ( buffer );
-                                continue;
-                        }
-
-                        if ( bufstat == BUFSTAT_MORE ) {
-                                NOPUTS ( buffer );
-                                NOPUTS ( "\n" KRED "HIT BUFSTAT_MORE" KNRM );
-                                continue;
-                        }
-
-                        if ( bufstat == BUFSTAT_FULL ) {
-                                NOPUTS ( buffer );
-                                NOPUTS ( "\n" KRED "HIT BUFSTAT_FULL; SEARCH"
-                                                KNRM );
+                        switch ( bi.status = populate_buffer ( repo->location,
+                                                &bi ) ) {
+                                case BUFSTAT_ERRNO:
+                                        fputs ( strerror ( errno ), stderr );
+                                        free ( repo );
+                                        dnull ( &dp );
+                                        return STATUS_ERRNO;
+                                case BUFSTAT_BORDR:
+                                case BUFSTAT_MORE:
+                                        NOPUTS ( bi.buffer );
+                                        NOPUTS ( "\n" KRED "HIT BUFSTAT_MORE"
+                                                        KNRM );
+                                        break;
+                                case BUFSTAT_FULL:
+                                        NOPUTS ( bi.buffer );
+                                        NOPUTS ( "\n" KRED "HIT " \
+                                                        "BUFSTAT_FULL; SEARCH"
+                                                        KNRM );
+                                        break;
                         }
                 }
 
@@ -623,6 +634,8 @@ enum status_t search_files ( struct repo_stack_t * stack, char ** needles )
                 dnull ( &dp );
         }
 
+        NOPUTS ( "\n" KRED "NO MORE FILES; SEARCH (IF NOT BUFSTAT_BORDR)"
+                        KNRM );
         return STATUS_OK;
 }
 
@@ -646,7 +659,6 @@ int main ( )
         }
 
         stack_print ( &repo_stack );
-        putchar ( '\n' );
 
         /* TODO: split main to allow direct-printing to stderr, possibly with an
          * optional prefix. */
