@@ -21,11 +21,6 @@
 #define CONFIGROOT_DEFAULT "/etc/portage"
 #define PROFILES_SUFFIX "/profiles/"
 
-struct desc_t {
-        char location [ PATH_MAX ];
-        struct repo_t parent;
-};
-
 enum status_t {
         STATUS_OK     =  0, /* everything is OK */
         STATUS_ERRNO  = -1, /* c.f. perror or strerror on errno */
