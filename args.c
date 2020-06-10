@@ -1,4 +1,4 @@
-/* ash-euses: argument-processor
+/* ash-euses: argument-processor [freestanding from ash-euses]
  * Ashley Dixon. */
 
 /* TODO: this file is currently freestanding from the main driver program; it is
@@ -11,6 +11,14 @@
 
 #define SET_BIT(val, n) ( val |= n )
 #define CHK_BIT(val, n) ( val &  n )
+
+/* Would this be better with a single call to printf, perhaps in an inline
+ * function ? */
+#define PREFIX_PRINT(prefix, status) \
+        fputs ( prefix, stderr ); \
+        fputs ( ": ", stderr ); \
+        fputs ( provide_arg_error ( status ), stderr ); \
+        putc ( '\n', stderr )
 
 /* The following command-line options are currently recognised:
  *
@@ -52,6 +60,38 @@ static const char * provide_arg_error ( enum argument_status_t status )
         }
 }
 
+/* match_arg: overcomplicated[ly] elegant argument-matcher, supporting both long
+ * and short argument forms, assuming that the arg_positions_t enum increments
+ * in powers of two. This function returns zero on success, or -1 on failure
+ * (unrecognised argument), populating the apos variable appropriately for the
+ * caller. */
+
+int match_arg ( const char * arg, enum arg_positions_t * apos )
+{
+        static const char * arg_full [ ] = {
+                "--repo-names", "--repo-paths", "--help", "--version"
+        }, * arg_abv [ ] = {
+                "-n", "-p", "-h", "-v"
+        };
+
+        /* `fargc`: full argument count */
+        static const int fargc = sizeof ( arg_full ) / sizeof ( *arg_full );
+
+        /* if the corresponding arg_abv value is NULL, there is no
+         * shortened counterpart against which to check */
+        for ( int j = 0; j < fargc; j++ )
+                if ( strcmp ( arg, arg_full [ j ] ) == 0 ||
+                                ( ( arg_abv [ j ] ) ?
+                                  ( strcmp ( arg, arg_abv [ j ] ) == 0 )
+                                  : 0 ) ) {
+                        *apos = 1 << j;
+                        break;
+                }
+
+        /* unrecognised argument ? */
+        return ( *apos == ARG_UNKNOWN ) ? -1 : 0;
+}
+
 /* process_args: process the argument list in `argv` and populate the `options`
  * global variable accordingly. This function, due to its notability, produces
  * its own error functions directly to the appropriate output buffer, and
@@ -62,35 +102,18 @@ static const char * provide_arg_error ( enum argument_status_t status )
 
 int process_args ( int argc, char ** argv )
 {
-        static const char * arg_str_full [ ] = {
-                "--repo-names", "--repo-paths", "--help", "--version"
-        }, * arg_str_short [ ] = {
-                "-n", "-p", "-h", "-v"
-        };
-
-        static const int full_arg_count = sizeof ( arg_str_full ) /
-                sizeof ( *arg_str_full );
-        enum argument_status_t status = ARGSTAT_OK;
+        /* enum argument_status_t status = ARGSTAT_OK; */
         enum arg_positions_t apos = ARG_UNKNOWN;
 
         for ( int i = 1; i < argc; i++ ) {
                 apos = ARG_UNKNOWN;
 
-                /* if the corresponding arg_str_short value is NULL, there is no
-                 * shortened counterpart against which to check */
-                for ( int j = 0; j < full_arg_count; j++ )
-                        if ( strcmp ( argv [ i ], arg_str_full [ j ] ) == 0 ||
-                                        ( ( arg_str_short [ j ] ) ?
-                                          ( strcmp ( argv [ i ],
-                                                     arg_str_short [ j ] )
-                                                        == 0 ) : 0 ) ) {
-                                apos = 1 << j;
-                                printf ( "\"%s\": %d\n", argv [ i ], apos );
-                                break;
-                        }
-
-                if ( apos == ARG_UNKNOWN )
-                        return -1; /* unrecognised argument */
+                if ( match_arg ( argv [ i ], &apos ) == 0 )
+                        printf ( "\"%s\": %d\n", argv [ i ], apos );
+                else {
+                        PREFIX_PRINT ( argv [ i ], ARGSTAT_UNKNWN );
+                        return -1;
+                }
         }
 
         return 0;
