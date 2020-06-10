@@ -101,6 +101,26 @@ static inline void print_version_info ( )
                         "can be found at " PROGRAM_LICENCE_URL ".\n" );
 }
 
+/* print_help_info: pretty-print information regarding the possible command-
+ * line arguments, with their abbreviated form and a brief description. */
+
+static inline void print_help_info ( )
+{
+        printf ( PROGRAM_NAME " command-line argument summary.\n"
+                        "\n%-13s -%-3s\t%s\n%-13s -%-3s\t%s\n" \
+                        "%-13s -%-3s\t%s\n%-13s -%-3s\t%s\n" \
+                        "%-13s -%-3s\t%s\n\n",
+                        "--list-repos", "r", "Prepend a list of located " \
+                                "repositories to the output.",
+                        "--repo-names", "n", "Print repository names for " \
+                                "each match",
+                        "--repo-paths", "p", "Print repository names for " \
+                                "each match (implies --repo-names).",
+                        "--help", "h", "Print this help information and exit.",
+                        "--version", "v", "Prepend version and license " \
+                                "information to the output." );
+}
+
 /* fnull: close and null a non-null file pointer. */
 
 static inline void fnull ( FILE ** fp )
@@ -746,8 +766,9 @@ int main ( int argc, char ** argv )
         char base [ PATH_MAX ];
         struct repo_stack_t repo_stack;
         enum status_t status = STATUS_OK;
+        int arg_idx = 0;
 
-        if ( argc < 2 || process_args ( argc, argv ) == -1 ) {
+        if ( argc < 2 || process_args ( argc, argv, &arg_idx ) == -1 ) {
                 fputs ( provide_error ( STATUS_BADARG ), stderr );
                 fputc ( '\n', stderr );
                 return EXIT_FAILURE;
@@ -755,6 +776,7 @@ int main ( int argc, char ** argv )
 
         stack_init ( &repo_stack );
         print_version_info ( ); /* TODO: this should be a command-line option */
+        print_help_info ( );    /* TODO: this should be a command-line option */
 
         if ( ( status = get_base_dir ( base ) != STATUS_OK ) ||
                         ( status = enumerate_repo_descriptions ( base,
@@ -772,8 +794,9 @@ int main ( int argc, char ** argv )
 
         /* TODO: split main to allow direct-printing to stderr, possibly with an
          * optional prefix. */
-        if ( ( status = search_files ( &repo_stack, & ( argv [ 1 ] ),
-                                        argc - 1 ) ) != STATUS_OK ) {
+        if ( argc - arg_idx > 0 && ( status = search_files ( &repo_stack, & (
+                                                argv [ arg_idx ] ), argc -
+                                        arg_idx ) ) != STATUS_OK ) {
                 fputs ( "Could not load the USE-description files:\n\t",
                                 stderr );
                 fputs ( provide_error ( status ), stderr );

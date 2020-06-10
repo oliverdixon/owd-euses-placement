@@ -16,18 +16,20 @@
  *    the repository in which the match was found, in the form "::<repo> =>
  *    <path>";
  *  - ARG_SHOW_HELP: show help information and exit;
- *  - ARG_SHOW_VERSION: show version information and exit. */
+ *  - ARG_SHOW_VERSION: show version information and exit;
+ *  - ARG_LIST_REPOS: list repositories to be searched. */
 
 enum arg_positions_t {
-        ARG_UNKNOWN          = 0,
-        ARG_PRINT_REPO_NAMES = 1,
-        ARG_PRINT_REPO_PATHS = 2,
-        ARG_SHOW_HELP        = 4,
-        ARG_SHOW_VERSION     = 8
+        ARG_UNKNOWN          =  0,
+        ARG_PRINT_REPO_NAMES =  1,
+        ARG_PRINT_REPO_PATHS =  2,
+        ARG_SHOW_HELP        =  4,
+        ARG_SHOW_VERSION     =  8,
+        ARG_LIST_REPOS       = 16
 };
 
 extern uint8_t options;
-int process_args ( int, char ** );
+int process_args ( int, char **, int * );
 
 #endif /* _ARGS_H */
 

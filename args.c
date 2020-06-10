@@ -48,9 +48,10 @@ static const char * provide_arg_error ( enum argument_status_t status )
 static int match_arg ( const char * arg, enum arg_positions_t * apos )
 {
         static const char * arg_full [ ] = {
-                "--repo-names", "--repo-paths", "--help", "--version"
+                "--repo-names", "--repo-paths", "--help", "--version",
+                "--list-repos"
         }, * arg_abv [ ] = {
-                "-n", "-p", "-h", "-v"
+                "-n", "-p", "-h", "-v", "-r"
         };
 
         /* `fargc`: full argument count */
@@ -77,20 +78,25 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
  * returns zero to indicate success, and -1 to indicate failure. The caller
  * should probably quit the program with an unsuccessful status code in the
  * event of the latter, as `options` may be incomplete and produce strange
- * results in later execution.
+ * results in later execution. On success, `advanced_idx` is set to the index of
+ * the next, non-argument option in `argv`. The new `argc` could be calculated
+ * by the caller with `argc - advanced_idx`.
  *
- * This function only considers arguments which begin with '-'. If that is not
- * the case, the argv entry is skipped. */
+ * If "--", or an argument not beginning with "-" is found, success is returned
+ * and further arguments are not considered. Thus, all options to be considered
+ * by the argument-processor must precede other arguments. */
 
-int process_args ( int argc, char ** argv )
+int process_args ( int argc, char ** argv, int * advanced_idx )
 {
         enum arg_positions_t apos = ARG_UNKNOWN;
+        int i = 1;
 
-        for ( int i = 1; i < argc; i++ ) {
+        for ( ; i < argc; i++ ) {
                 apos = ARG_UNKNOWN;
 
-                if ( argv [ i ] [ 0 ] != '-' )
-                        continue; /* not an argument */
+                if ( argv [ i ] [ 0 ] != '-' ||
+                                strcmp ( argv [ i ], "--" ) == 0 )
+                        break; /* do not consider further arguments */
 
                 if ( match_arg ( argv [ i ], &apos ) == 0 ) {
                         if ( CHK_BIT ( options, apos ) != 0 ) {
@@ -98,7 +104,6 @@ int process_args ( int argc, char ** argv )
                                 return -1;
                         }
 
-                        printf ( "\"%s\": %d\n", argv [ i ], apos );
                         SET_BIT ( options, apos );
                 } else {
                         PREFIX_PRINT ( argv [ i ], ARGSTAT_UNKNWN );
@@ -106,6 +111,7 @@ int process_args ( int argc, char ** argv )
                 }
         }
 
+        *advanced_idx = i - 1;
         return 0;
 }
 
