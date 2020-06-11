@@ -17,7 +17,10 @@
  *    <path>";
  *  - ARG_SHOW_HELP: show help information and exit;
  *  - ARG_SHOW_VERSION: show version information and exit;
- *  - ARG_LIST_REPOS: list repositories to be searched. */
+ *  - ARG_LIST_REPOS: list repositories to be searched;
+ *  - ARG_SEARCH_STRICT: only search the flag field (identified by suffixing the
+ *    query with " - "), and not the entire buffer;
+ *  - ARG_NO_COMPLAINING: suppress the PORTDIR warning message. */
 
 enum arg_positions_t {
         ARG_UNKNOWN          =  0,

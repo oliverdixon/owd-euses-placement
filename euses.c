@@ -27,18 +27,17 @@
 /* Globally accessible message buffer for better error-reporting; it should only
  * be written to using the populate_error_buffer function, as it provides
  * overflow-protection and pretty truncation. */
-char error_buffer [ PATH_MAX ];
+char error_buffer [ ERROR_MAX ];
 
 enum status_t {
+        STATUS_ERRNO  =  1, /* c.f. perror or strerror on errno */
         STATUS_OK     =  0, /* everything is OK */
-        STATUS_ERRNO  = -1, /* c.f. perror or strerror on errno */
-        STATUS_NOREPO = -2, /* no repository-description files were found */
-        STATUS_NOGENR = -3, /* no gentoo.conf repository-description file */
-        STATUS_ININME = -4, /* the ini file did not contain "[name]" */
-        STATUS_INILOC = -5, /* the location attribute doesn't exist */
-        STATUS_INILCS = -6, /* the location value exceeded PATH_MAX - 1 */ 
-        STATUS_INIEMP = -7, /* the repository-description file was empty */ 
-        STATUS_BADARG = -8  /* inadequate arguments were provided */
+        STATUS_NOREPO = -1, /* no repository-description files were found */
+        STATUS_NOGENR = -2, /* no gentoo.conf repository-description file */
+        STATUS_ININME = -3, /* the ini file did not contain "[name]" */
+        STATUS_INILOC = -4, /* the location attribute doesn't exist */
+        STATUS_INILCS = -5, /* the location value exceeded PATH_MAX - 1 */ 
+        STATUS_INIEMP = -6  /* the repository-description file was empty */ 
 };
 
 enum dir_status_t {
@@ -71,9 +70,11 @@ struct buffer_info_t {
 
 /* provide_error: returns a human-readable string representing an error code, as
  * enumerated in status_t. If the passed code is STATUS_ERRNO, the strerror
- * function is used with the current value of errno. */
+ * function is used with the current value of errno. This function takes an
+ * integer as opposed to the `status_t` enum so it can be used with similar
+ * functions in a function pointer. */
 
-static const char * provide_error ( enum status_t status )
+static const char * provide_error ( int status )
 {
         switch ( status ) {
                 case STATUS_OK:     return "Everything is OK.";
@@ -88,47 +89,52 @@ static const char * provide_error ( enum status_t status )
                                         "contain the location attribute.";
                 case STATUS_INILCS: return "A repository-description file" \
                                         "contains an unwieldy location value.";
-                case STATUS_BADARG: return "Inadequate command-line arguments" \
-                                        " were provided. Try \"-h\".";
 
                 default: return "Unknown error";
         }
 }
 
 /* print_error: format a `status` code, prefixed with `prefix`, and send it to
- * stderr. This function relies on the global error buffer, `error_buffer`. */
+ * stderr. This function relies on the global error buffer, `error_buffer`, and
+ * uses the function pointer `get_detail` to retrieve the error detail; this
+ * should take a single integer and return a `const char *`. */
 
-static inline void print_error ( const char * prefix, enum status_t status )
+void print_error ( const char * prefix, int status,
+                const char * ( * get_detail ) ( int ) )
 {
         fprintf ( stderr, PROGRAM_NAME " caught a fatal error and cannot " \
                         "continue.\nRe-run with \"--help\" or \"-h\" for help" \
                         ".\n\n\tSummary: \"%s\"\n\tOffending Article:" \
-                        " \"%s\"\n\tError Detail: \"%s\"\n\tExit Code: %d\n",
+                        " \"%s\"\n\tError Detail: \"%s\"\n\tStatus Code: %d%s" \
+                        "\n\tProgram Exit Code: %d\n",
+                        /* What the fuck is going on ? */
                         prefix, ( error_buffer [ 0 ] != '\0' ) ? error_buffer :
-                        "N/A", provide_error ( status ), EXIT_FAILURE );
+                        "N/A", get_detail ( status ), ( status == STATUS_ERRNO )
+                        ? errno : status, ( status == STATUS_ERRNO ) ?
+                        " (system errno)" : " (internal)", EXIT_FAILURE );
 }
 
 /* populate_error_buffer: copy the `message` into the global `error_buffer`,
  * truncating with " [...]" if necessary. This function assumes that
- * error_buffer is of the size PATH_MAX. */
+ * error_buffer is of the size ERROR_MAX. */
 
-static void populate_error_buffer ( const char * message )
+void populate_error_buffer ( const char * message )
 {
         size_t msg_len = 0;
         error_buffer [ 0 ] = '\0';
 
-        strncpy ( error_buffer, message, PATH_MAX - 1 );
+        strncpy ( error_buffer, message, ERROR_MAX - 1 );
 
-        if ( ( msg_len = strlen ( message ) ) >= PATH_MAX - 1 ) {
+        if ( ( msg_len = strlen ( message ) ) >= ERROR_MAX - 1 ) {
                 /* indicate that the message in the error buffer has been
                  * truncated */
-                error_buffer [ PATH_MAX - 7 ] = ' ';
-                error_buffer [ PATH_MAX - 6 ] = '[';
-                error_buffer [ PATH_MAX - 5 ] = '.';
-                error_buffer [ PATH_MAX - 4 ] = '.';
-                error_buffer [ PATH_MAX - 3 ] = '.';
-                error_buffer [ PATH_MAX - 2 ] = ']';
-                error_buffer [ PATH_MAX - 1 ] = '\0';
+                error_buffer [ ERROR_MAX - 7 ] = ' ';
+                error_buffer [ ERROR_MAX - 6 ] = '[';
+                error_buffer [ ERROR_MAX - 5 ] = '.';
+                error_buffer [ ERROR_MAX - 4 ] = '.';
+                error_buffer [ ERROR_MAX - 3 ] = '.';
+                error_buffer [ ERROR_MAX - 2 ] = ']';
+                error_buffer [ ERROR_MAX - 1 ] = '\0';
         }
 }
 
@@ -962,11 +968,11 @@ int main ( int argc, char ** argv )
         int arg_idx = 0;
         error_buffer [ 0 ] = '\0';
 
-        if ( argc < 2 || process_args ( argc, argv, &arg_idx ) == -1 ) {
-                fputs ( provide_error ( STATUS_BADARG ), stderr );
-                fputc ( '\n', stderr );
+        if ( argc < 2 || process_args ( argc, argv, &arg_idx ) == -1 )
+                /* `process_args` provides its own error messages with
+                 * print_error, however perhaps this should be changed ?
+                 * TODO: consider. */
                 return EXIT_FAILURE;
-        }
 
         if ( CHK_ARG ( options, ARG_SHOW_VERSION ) != 0 )
                 print_version_info ( );
@@ -978,7 +984,7 @@ int main ( int argc, char ** argv )
 
         if ( ( status = get_repos ( base, &repo_stack ) ) ) {
                 print_error ( "Could not use the repository-description " \
-                                "base directory.", status );
+                                "base directory.", status, &provide_error );
                 return EXIT_FAILURE;
         }
 

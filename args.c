@@ -5,17 +5,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "euses.h"
 #include "args.h"
 
 #define SET_ARG(val, n) ( val |= n )
-
-/* Would this be better with a single call to printf, perhaps in an inline
- * function ? */
-#define PREFIX_PRINT(prefix, status) \
-        fputs ( prefix, stderr ); \
-        fputs ( ": ", stderr ); \
-        fputs ( provide_arg_error ( status ), stderr ); \
-        putc ( '\n', stderr )
 
 enum argument_status_t {
         ARGSTAT_OK     =  0, /* everything is OK */
@@ -28,7 +21,7 @@ uint8_t options = 0;
 /* provide_arg_error: returns a human-readable string representing the provided
  * error code in `status`, as enumerated in `argument_status_t`. */
 
-static const char * provide_arg_error ( enum argument_status_t status )
+static const char * provide_arg_error ( int status )
 {
         switch ( status ) {
                 case ARGSTAT_OK:     return "Everything is OK.";
@@ -100,13 +93,20 @@ int process_args ( int argc, char ** argv, int * advanced_idx )
 
                 if ( match_arg ( argv [ i ], &apos ) == 0 ) {
                         if ( CHK_ARG ( options, apos ) != 0 ) {
-                                PREFIX_PRINT ( argv [ i ], ARGSTAT_DOUBLE );
+                                populate_error_buffer ( argv [ i ] );
+                                print_error ( "Inadequate command-line " \
+                                                "arguments were provided.",
+                                                ARGSTAT_DOUBLE,
+                                                &provide_arg_error );
                                 return -1;
                         }
 
                         SET_ARG ( options, apos );
                 } else {
-                        PREFIX_PRINT ( argv [ i ], ARGSTAT_UNKNWN );
+                        populate_error_buffer ( argv [ i ] );
+                        print_error ( "Inadequate command-line arguments " \
+                                        "were provided.", ARGSTAT_UNKNWN,
+                                        &provide_arg_error );
                         return -1;
                 }
         }
