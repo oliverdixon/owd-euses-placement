@@ -14,7 +14,8 @@ enum argument_status_t {
         ARGSTAT_OK     =  0, /* everything is OK */
         ARGSTAT_DOUBLE = -1, /* an argument would doubly defined */
         ARGSTAT_UNKNWN = -2, /* the provided argument was unknown */
-        ARGSTAT_LACK   = -3  /* not enough arguments were provided */
+        ARGSTAT_LACK   = -3, /* not enough arguments were provided */
+        ARGSTAT_EMPTY  = -4  /* the provided argument was meaningless/empty */
 };
 
 uint8_t options = 0;
@@ -30,6 +31,7 @@ static const char * provide_arg_error ( int status )
                 case ARGSTAT_UNKNWN: return "Argument was unrecognised.";
                 case ARGSTAT_LACK:   return "Not enough arguments were " \
                                         "provided.";
+                case ARGSTAT_EMPTY:  return "Argument was empty.";
 
                 default:             return "Unknown error";
         }
@@ -68,6 +70,42 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
         return ( *apos == ARG_UNKNOWN ) ? -1 : 0;
 }
 
+/* match_abbr_arg: given an abbreviated string beginning with '-', this function
+ * sets the appropriate arguments for every character in the string. Should a
+ * character be unrecognised or doubly defined, ARGSTAT_UNKNWN or ARGSTAT_DOUBLE
+ * is returned respectively. On success, ARGSTAT_OK is returned. */
+
+static enum argument_status_t match_abbr_arg ( const char * str )
+{
+        static const char * abbr_list = "nphvrsq";
+        const int abbr_sz = strlen ( abbr_list );
+        size_t len = strlen ( str );
+        int found = 0;
+
+        for ( size_t i = 1; i < len; i++ ) {
+                found = 0;
+
+                for ( int j = 0; j < abbr_sz; j++ ) {
+                        if ( str [ i ] == abbr_list [ j ] ) {
+                                if ( CHK_ARG ( options, 1 << j ) != 0 )
+                                        return ARGSTAT_DOUBLE;
+                                SET_ARG ( options, 1 << j );
+                                found = 1;
+
+                                if ( str [ i + 1 ] == '\0' )
+                                        return ARGSTAT_OK;
+
+                                break;
+                        }
+                }
+
+                if ( found == 0 )
+                        return ARGSTAT_UNKNWN;
+        }
+
+        return ARGSTAT_OK;
+}
+
 /* process_args: process the argument list in `argv` and populate the `options`
  * global variable accordingly. This function, due to its notability, produces
  * its own error functions directly to the appropriate output buffer (via
@@ -85,8 +123,9 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
 int process_args ( int argc, char ** argv, int * advanced_idx )
 {
         const char * error_prefix = "Inadequate command-line arguments were " \
-                                        "provided";
+                                        "provided.";
         enum arg_positions_t apos = ARG_UNKNOWN;
+        enum argument_status_t argstat = ARGSTAT_OK;
         int i = 1;
 
         if ( argc < 2 ) {
@@ -101,7 +140,16 @@ int process_args ( int argc, char ** argv, int * advanced_idx )
                                 strcmp ( argv [ i ], "--" ) == 0 )
                         break; /* do not consider further arguments */
 
+                if ( argv [ i ] [ 1 ] == '\0' ) {
+                        /* check for an empty argument ("-<null>") */
+                        populate_error_buffer ( argv [ i ] );
+                        print_error ( error_prefix, ARGSTAT_EMPTY,
+                                        &provide_arg_error );
+                        return -1;
+                }
+
                 if ( match_arg ( argv [ i ], &apos ) == 0 ) {
+                        /* full or shortened individual arguments */
                         if ( CHK_ARG ( options, apos ) != 0 ) {
                                 populate_error_buffer ( argv [ i ] );
                                 print_error ( error_prefix, ARGSTAT_DOUBLE,
@@ -111,10 +159,14 @@ int process_args ( int argc, char ** argv, int * advanced_idx )
 
                         SET_ARG ( options, apos );
                 } else {
-                        populate_error_buffer ( argv [ i ] );
-                        print_error ( error_prefix, ARGSTAT_UNKNWN,
-                                        &provide_arg_error );
-                        return -1;
+                        if ( ( argstat = match_abbr_arg ( argv [ i ] ) )
+                                        != ARGSTAT_OK ) {
+                                /* combined arguments */
+                                populate_error_buffer ( argv [ i ] );
+                                print_error ( error_prefix, argstat,
+                                                &provide_arg_error );
+                                return -1;
+                        }
                 }
         }
 

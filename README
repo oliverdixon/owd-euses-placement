@@ -9,8 +9,6 @@ moderately simple to drastically improve for the Beta release.
 
 Inexhaustive TODO list for the next major release:
 
-        [ ] Improve the argument-processor,  allowing  for  the  combination  of
-                arguments (e.g. "-p -n" == "-pn" == "-np").
         [ ] Increase the number of  files  searched  to  include  profiles/desc/
                 *.desc; this will drastically increase the search yield. Perhaps
                 the user could be given slightly more  control  regarding  which
