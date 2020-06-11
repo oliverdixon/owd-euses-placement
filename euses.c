@@ -657,6 +657,23 @@ static char * find_line_bounds ( char * buffer_start, char * substr_start,
         return start;
 }
 
+/* print_search_result: print a search result, `result_str`, from the repo
+ * `repo` to stdout, respecting the ARG_PRINT_REPO_PATHS and
+ * ARG_PRINT_REPO_NAMES command-line arguments. */
+
+static void print_search_result ( const char * result_str,
+                struct repo_t * repo )
+{
+        if ( CHK_BIT ( options, ARG_PRINT_REPO_PATHS ) != 0 )
+                /* ARG_PRINT_REPO_PATHS implies ARG_PRINT_REPO_NAMES */
+                printf ( "%s\n\t(::%s => %s)\n", result_str, repo->name,
+                                repo->location );
+        else if ( CHK_BIT ( options, ARG_PRINT_REPO_NAMES ) != 0 )
+                printf ( "%s (::%s)\n", result_str, repo->name );
+        else
+                puts ( result_str );
+}
+
 /* search_buffer: search the `buffer` for the provided `needles`, of which there
  * are `ncount`. This function searches and prints the results as soon as they
  * are found, and, providing uninterrupted execution, exits with `buffer`
@@ -689,11 +706,7 @@ static void search_buffer ( char buffer [ BUFFER_SZ ], char ** needles,
                                         == NULL )
                                 break;
 
-                        /* TODO: provide printing the repo as a command-line
-                         * option: "verbose" ? */
-                        printf ( "%s\n\t(::%s => %s)\n", ptr, repo->name,
-                                        repo->location );
-
+                        print_search_result ( ptr, repo );
                         if ( buffer == NULL )
                                 break; /* end of buffer; see `marker` */
 
@@ -713,9 +726,9 @@ static void search_buffer ( char buffer [ BUFFER_SZ ], char ** needles,
  *
  * TODO: this function, along with enumerate_repo_description, relies upon the
  * d_type field of the dirent structure, which is not recognised in strict
- * standards-compliance mode. This isn't particularly a "big deal", as it is
- * very widely supported, however I would like to eradicate its use if there's
- * an easier way to detect the nature of results from readdir(3). */
+ * standards-compliance mode (-std=c99). This isn't particularly a "big deal",
+ * as it is very widely supported, however I would like to eradicate its use if
+ * there's an easier way to detect the nature of results from readdir(3). */
 
 static enum status_t search_files ( struct repo_stack_t * stack,
                 char ** needles, int ncount )
