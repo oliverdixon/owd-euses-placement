@@ -21,7 +21,7 @@
 #define CONFIGROOT_ENVNAME "PORTAGE_CONFIGROOT"
 #define CONFIGROOT_SUFFIX  "/repos.conf/"
 #define CONFIGROOT_DEFAULT "/etc/portage"
-#define PORTAGE_MAKECONF   "/make.conf" /* to be appended to the config root */
+#define PORTAGE_MAKECONF   "/../make.conf"
 #define PROFILES_SUFFIX    "/profiles/"
 #define DEFAULT_REPO_NAME  "gentoo"
 
@@ -95,10 +95,11 @@ static const char * provide_error ( int status )
         }
 }
 
-/* print_error: format a `status` code, prefixed with `prefix`, and send it to
- * stderr. This function relies on the global error buffer, `error_buffer`, and
- * uses the function pointer `get_detail` to retrieve the error detail; this
- * should take a single integer and return a `const char *`. */
+/* [exposed function] print_error: format a `status` code, prefixed with
+ * `prefix`, and send it to stderr. This function relies on the global error
+ * buffer, `error_buffer`, and uses the function pointer `get_detail` to
+ * retrieve the error detail; this should take a single integer and return a
+ * `const char *`.  */
 
 void print_error ( const char * prefix, int status,
                 const char * ( * get_detail ) ( int ) )
@@ -115,15 +116,15 @@ void print_error ( const char * prefix, int status,
                         " (system errno)" : " (internal)", EXIT_FAILURE );
 }
 
-/* populate_error_buffer: copy the `message` into the global `error_buffer`,
- * truncating with " [...]" if necessary. This function assumes that
- * error_buffer is of the size ERROR_MAX. */
+/* [exposed function] populate_error_buffer: copy the `message` into the global
+ * `error_buffer`, truncating with " [...]" if necessary. This function assumes
+ * that error_buffer is of the size ERROR_MAX. */
 
 void populate_error_buffer ( const char * message )
 {
         size_t msg_len = 0;
-        error_buffer [ 0 ] = '\0';
 
+        error_buffer [ 0 ] = '\0'; /* previous call did not result in a fatal */
         strncpy ( error_buffer, message, ERROR_MAX - 1 );
 
         if ( ( msg_len = strlen ( message ) ) >= ERROR_MAX - 1 ) {
@@ -279,13 +280,26 @@ static char * skip_whitespace ( char * str )
                 }
 }
 
-/* ini_get_location: gets the value of the `location` key in the ini file
+/* replace_char: replace all occurrences of `find` with `replace` in `str`. */
+
+static void replace_char ( char * str, const char find, const char replace )
+{
+        char * pos = str;
+
+        while ( ( pos = strchr ( pos, find ) ) != NULL ) {
+                str [ pos - str ] = replace;
+                if ( * ( pos++ ) == '\0' )
+                        break;
+        }
+}
+
+/* get_keyval_value: gets the value of the `location` key in the ini file
  * provided in `buffer`, ignoring all horizontal whitespace; see the
  * skip_whitespace function. On success, this function returns STATUS_OK and
  * writes the appropriate value into the `location` string. On failure,
  * STATUS_INILOC is returned. */
 
-static enum status_t ini_get_location ( char location [ PATH_MAX ],
+static enum status_t get_keyval_value ( char location [ PATH_MAX ],
                 char buffer [ BUFFER_SZ ], const char * key )
 {
         char * start = strstr ( buffer, key ), * end = NULL;
@@ -387,7 +401,7 @@ static enum status_t parse_repo_description ( struct repo_t * repo,
                         != STATUS_OK || ( status =
                                 ini_get_name ( repo->name, buffer, &offset ) )
                         != STATUS_OK || ( status = 
-                                ini_get_location ( repo->location,
+                                get_keyval_value ( repo->location,
                                         & ( buffer [ offset ] ), "location" ) )
                         != STATUS_OK ) {
                 /* All these functions operate on the same desc_path. */
@@ -615,8 +629,11 @@ static enum buffer_status_t populate_buffer ( char * path,
         /* ensure the buffer is null-terminated */
         b_inf->buffer [ BUFFER_SZ - 1 ] = '\0';
 
-        if ( b_inf->fp == NULL && ( b_inf->fp = fopen ( path, "r" ) ) == NULL )
+        if ( b_inf->fp == NULL && ( b_inf->fp = fopen ( path, "r" ) )
+                        == NULL ) {
+                populate_error_buffer ( path );
                 return BUFSTAT_ERRNO; /* the file cannot be opened */
+        }
 
         if ( ( bw = fread ( & ( b_inf->buffer [ b_inf->idx ] ),
                                         sizeof ( char ),
@@ -717,7 +734,7 @@ static char * find_line_bounds ( char * buffer_start, char * substr_start,
                 if ( ( start = strrchr ( buffer_start, '\n' ) ) == NULL )
                         start = buffer_start;
                 else if ( * ( start++ ) == '\0' ) {
-                        /* the entry legitimate/poorly formatted */
+                        /* the entry illegitimate/poorly formatted */
                         buffer_start [ key_idx ] = tmp;
                         return NULL;
                 }
@@ -842,6 +859,7 @@ static enum status_t search_files ( struct repo_stack_t * stack,
         while ( ( repo = stack_pop ( stack ) ) != NULL ) {
                 bi.buffer [ 0 ] = '\0'; /* new buffer on repo change */
                 if ( open_profiles_path ( repo->location, &dp ) == -1 ) {
+                        populate_error_buffer ( repo->location );
                         free ( repo );
                         dnull ( &dp );
                         return STATUS_ERRNO;
@@ -907,20 +925,113 @@ static inline void portdir_complain (  )
                         "flexible syntax.\n\n", stderr  );
 }
 
+/* construct_path: copy `a` to `dest`, and then append `b`. This function
+ * returns zero on success, or -1 on failure. In the latter case, errno is set
+ * appropriately and the error buffer is populated with `b`.
+ *
+ * TODO: convert the entire program to use this general function. */
+
+static int construct_path ( char * dest, const char * a, const char * b )
+{
+        size_t len = 0;
+        dest [ 0 ] = '\0';
+
+        if ( ( len = strlen ( a ) + strlen ( b ) ) >= PATH_MAX - 1 ) {
+                populate_error_buffer ( b );
+                errno = ENAMETOOLONG;
+                return -1;
+        }
+
+        dest [ len - 1 ] = '\0';
+        strcpy ( dest, a );
+        strcat ( dest, b );
+
+        return 0;
+}
+
+/* portdir_makeconf: attempt to extract the value from the "PORTDIR" key-value
+ * pair in $PORTAGE_CONFIGROOT/make.conf. On success, this function returns
+ * STATUS_OK, and appropriately populates the error buffer on failure. The
+ * caller can determine whether a key has been found by testing the first
+ * character of `value` for a null-terminator. */
+
+static enum status_t portdir_makeconf ( char base [ PATH_MAX ],
+                char value [ PATH_MAX ] )
+{
+        char buffer [ BUFFER_SZ ];
+        FILE * fp = NULL;
+        enum status_t status = STATUS_OK;
+
+        if ( construct_path ( value, base, PORTAGE_MAKECONF ) == -1 )
+                return STATUS_ERRNO;
+
+        if ( ( fp = fopen ( value, "r" ) ) == NULL ) {
+                populate_error_buffer ( value );
+                return STATUS_ERRNO;
+        }
+
+        if ( fread ( buffer, sizeof ( char ), PATH_MAX - 1, fp ) <
+                        PATH_MAX - 1 && ! feof ( fp ) ) {
+                fclose ( fp );
+                populate_error_buffer ( value );
+                return STATUS_ERRNO;
+        }
+
+        fclose ( fp );
+
+        if ( ( status = get_keyval_value ( value, buffer, "PORTDIR" ) )
+                        != STATUS_OK ) {
+                if ( status == STATUS_INILOC )
+                        return STATUS_OK; /* not found */
+
+                populate_error_buffer ( PORTAGE_MAKECONF );
+                return status;
+        } else
+                /* Extraneous hyphens make no difference when placed as prefixes
+                 * and suffixes to a UNIX path. */
+                replace_char ( value, '"', '/' );
+
+        return STATUS_OK;
+}
+
+/* portdir_attempt_envvar: attempt to retrieve the value of PORTDIR from the
+ * environment variable string with getenv(3). If, for any reason, this cannot
+ * be completed, -1 is returned; this is not necessarily a fatal error, and
+ * should not be treated as such. On success, some heap memory is allocated and
+ * pushed to the stack, and zero is returned. */
+
+static int portdir_attempt_envvar ( struct repo_stack_t * stack )
+{
+        struct repo_t * tmp_repo = NULL;
+        char * value = getenv ( "PORTDIR" );
+
+        if ( value != NULL && ( tmp_repo = malloc ( sizeof ( struct repo_t ) ) )
+                        != NULL ) {
+                strcpy ( tmp_repo->name, DEFAULT_REPO_NAME );
+
+                if ( strlen ( value ) < PATH_MAX ) {
+                        strcpy ( tmp_repo->location, value );
+                        stack_push ( stack, tmp_repo );
+                        portdir_complain ( );
+
+                        return 0;
+                }
+
+                free ( tmp_repo );
+        }
+
+        return -1;
+}
+
 /* get_repos: populate the stack with a list of repositories, returning
  * STATUS_OK on success; confer with get_base_dir, enumerate_repo_descriptions,
  * and their derivatives for more explicit information regrading the potential
- * errors. TODO (P.I.) This function first attempts to find the deprecated
- * PORTDIR value, either as an environment value, or as a key-value pair
- * in PORTAGE_MAKECONF. If this is found, it is used in favour of repos.conf/,
- * but a warning is issued as a means of encouraging users to drop deprecated
- * features. If, for any reason, PORTDIR cannot be taken from one of the two
- * sources, the standard repos.conf/ mechanism is used.
- *
- * TODO: reading from the environment variable is complete. Now, extracting from
- * the make.conf must be implemented. I suspect that ini_get_location (possibly
- * renamed to something more general) can be used, providing "PORTDIR" as the
- * key substring.
+ * errors. This function first attempts to find the deprecated PORTDIR value,
+ * either as an environment value, or as a key-value pair in PORTAGE_MAKECONF.
+ * If this is found, it is used in favour of repos.conf/, but a warning is
+ * issued as a means of encouraging users to drop deprecated features. If, for
+ * any reason, PORTDIR cannot be taken from one of the two sources, the standard
+ * repos.conf/ mechanism is used.
  *
  * If this function is successful, it dynamically allocates some memory for each
  * of the encountered repositories and pushes them to the `stack`, which can be
@@ -933,31 +1044,38 @@ static enum status_t get_repos ( char base [ PATH_MAX ],
                 struct repo_stack_t * stack )
 {
         enum status_t status = STATUS_OK;
-        char * portdir_val = NULL;
         struct repo_t * tmp_repo = NULL;
 
         stack_init ( stack );
 
-        /* PORTDIR environment variable */
-        if ( ( portdir_val = getenv ( "PORTDIR" ) ) != NULL )
-                if ( ( tmp_repo = malloc ( sizeof ( struct repo_t ) ) )
-                                != NULL ) {
-                        strcpy ( tmp_repo->name, DEFAULT_REPO_NAME );
+        if ( ( status = get_base_dir ( base ) ) != STATUS_OK )
+                return status;
 
-                        if ( strlen ( portdir_val ) < PATH_MAX ) {
-                                strcpy ( tmp_repo->location, portdir_val );
-                                stack_push ( stack, tmp_repo );
-                                portdir_complain ( );
+        /* Try the PORTDIR environment variable. */
+        if ( portdir_attempt_envvar ( stack ) == 0 )
+                return STATUS_OK; /* successfully pushed to stack */
 
-                                return STATUS_OK;
-                        }
+        /* Try the make.conf file. */
 
+        if ( ( tmp_repo = malloc ( sizeof ( struct repo_t ) ) ) != NULL ) {
+                if ( ( status = portdir_makeconf ( base, tmp_repo->location ) )
+                                != STATUS_OK ) {
                         free ( tmp_repo );
+                        return status;
                 }
 
+                if ( tmp_repo->location [ 0 ] != '\0' ) {
+                        strcpy ( tmp_repo->name, DEFAULT_REPO_NAME );
+                        stack_push ( stack, tmp_repo );
+                        portdir_complain ( );
+
+                        return STATUS_OK;
+                } else
+                        free ( tmp_repo );
+        }
+
         /* Use repos.conf/ */
-        if ( ( status = get_base_dir ( base ) != STATUS_OK ) ||
-                        ( status = enumerate_repo_descriptions ( base, stack ) )
+        if ( ( status = enumerate_repo_descriptions ( base, stack ) )
                         != STATUS_OK ) {
                 stack_cleanse ( stack );
                 return status;
@@ -997,7 +1115,7 @@ int main ( int argc, char ** argv )
         if ( argc - arg_idx > 0 && ( status = search_files ( &repo_stack, & (
                                                 argv [ arg_idx ] ), argc -
                                         arg_idx ) ) != STATUS_OK ) {
-                print_error ( "Could not load the USE-description files",
+                print_error ( "Could not load the USE-description files.",
                                 status, &provide_error );
                 stack_cleanse ( &repo_stack );
                 return EXIT_FAILURE;
