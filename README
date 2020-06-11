@@ -1,6 +1,28 @@
-                  == This program is  currently in development, and  is  thus ==
-                  == unusable  for its described purpose.  The expected  time ==
-                  ==               of a stable deployment is late-June, 2020. ==
+NOTE REGARDING THE CURRENT STATE:
+
+This application is now of a reasonable quality, and can thus be  considered  as
+Alpha software.  Many features are yet to be added, few of which are included in
+the README body, however it works at a  basic  level.   The  yield  is  severely
+lacking  compared  to  the  original  tool,  as  it  only  scans   files   <repo
+base>/profiles/*.desc,  which  is  terribly  inflexible,   however   should   be
+moderately simple to drastically improve for the Beta release.
+
+Inexhaustive TODO list for the next major release:
+
+        [ ] Improve the error-reporting situation  to  provide  the  problematic
+                file path, in addition to the error.
+        [ ] Increase the number of  files  searched  to  include  profiles/desc/
+                *.desc; this will drastically increase the search yield. Perhaps
+                the user could be given slightly more  control  regarding  which
+                files  should  and  should  not  be  searched   (e.g.,   exclude
+                architectures which do  not  align  with  that  of  the  current
+                system).
+        [ ] Investigate the alternatives to strstr(3),  preferring  performance.
+                Perhaps the Boyer-Moore  algorithm  could  be  of  assistance  ?
+        [ ] Address the many TODOs in the code, e.g.\ eradicate usage of  d_type
+                to boost portability to almost any UNIX-like system.
+
+==========
 
 `ash-euses` ("the Program") is a rewrite of the  classic  Gentoo  Linux  utility
 `euses`, originally authored by Jeroen Roovers [1, 2], as an attempt to  rectify
