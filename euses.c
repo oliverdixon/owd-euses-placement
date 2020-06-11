@@ -110,7 +110,7 @@ static inline void print_help_info ( const char * invocation )
                         "Syntax: %s [options] substrings\n" \
                         "\n%-13s -%-3s\t%s\n%-13s -%-3s\t%s\n" \
                         "%-13s -%-3s\t%s\n%-13s -%-3s\t%s\n" \
-                        "%-13s -%-3s\t%s\n", invocation,
+                        "%-13s -%-3s\t%s\n%-13s -%-3s\t%s\n", invocation,
                         "--list-repos", "r", "Prepend a list of located " \
                                 "repositories to the output.",
                         "--repo-names", "n", "Print repository names for " \
@@ -119,7 +119,9 @@ static inline void print_help_info ( const char * invocation )
                                 "each match (implies --repo-names).",
                         "--help", "h", "Print this help information and exit.",
                         "--version", "v", "Prepend version and license " \
-                                "information to the output." );
+                                "information to the output.",
+                        "--strict", "s", "Search only in the flag field, " \
+                                "and exclude the description." );
 }
 
 /* fnull: close and null a non-null file pointer. */
@@ -417,7 +419,7 @@ static enum status_t enumerate_repo_descriptions ( char base [ ],
         dnull ( &dp );
         if ( gentoo_hit ) {
                 /* print the repository stack, if appropriate */
-                if ( CHK_BIT ( options, ARG_LIST_REPOS ) != 0 ) {
+                if ( CHK_ARG ( options, ARG_LIST_REPOS ) != 0 ) {
                         fputs ( "Configuration directory: ", stdout );
                         puts ( base );
                         putchar ( '\n' );
@@ -644,8 +646,9 @@ static char * find_line_bounds ( char * buffer_start, char * substr_start,
 
         if ( ( start = strrchr ( buffer_start, '\n' ) ) == NULL ||
                         *start == '\n' )
-                /* the entry was not preceded with a newline */
-                start = substr_start;
+                /* The entry was not preceded with a newline; it's safe to
+                 * assume that this is the first entry in the buffer. */
+                start = buffer_start;
         else if ( * ( start++ ) == '\0' ) {
                 /* the entry legitimate/poorly formatted */
                 buffer_start [ key_idx ] = tmp;
@@ -681,12 +684,12 @@ static char * find_line_bounds ( char * buffer_start, char * substr_start,
 static void print_search_result ( const char * result_str,
                 struct repo_t * repo, int truncated )
 {
-        if ( CHK_BIT ( options, ARG_PRINT_REPO_PATHS ) != 0 )
+        if ( CHK_ARG ( options, ARG_PRINT_REPO_PATHS ) != 0 )
                 /* ARG_PRINT_REPO_PATHS implies ARG_PRINT_REPO_NAMES */
                 printf ( "%s%s\n\t(::%s => %s)\n", result_str, ( truncated ) ?
                                 " [...]" : "",repo->name,
                                 repo->location );
-        else if ( CHK_BIT ( options, ARG_PRINT_REPO_NAMES ) != 0 )
+        else if ( CHK_ARG ( options, ARG_PRINT_REPO_NAMES ) != 0 )
                 printf ( "%s%s (::%s)\n", result_str, ( truncated ) ? " [...]"
                                 : "", repo->name );
         else {
@@ -707,8 +710,9 @@ static void print_search_result ( const char * result_str,
 static void search_buffer ( char buffer [ BUFFER_SZ ], char ** needles,
                 int ncount, struct repo_t * repo )
 {
-        char * ptr = NULL, query [ QUERY_MAX ], * buffer_start = buffer;
-        size_t len = 0;
+        char * ptr = NULL, query [ QUERY_MAX ], * buffer_start = buffer,
+                * substr = NULL;
+        size_t len = 0; 
 
         for ( int i = 0; i < ncount; i++ ) {
                 buffer = buffer_start;
@@ -721,11 +725,15 @@ static void search_buffer ( char buffer [ BUFFER_SZ ], char ** needles,
 
                 /* This should probably be an option: "strict" ?
                  * Otherwise, just pass the raw needle into strstr. */
-                strcpy ( query, needles [ i ] );
-                strcat ( query, " - " );
-                query [ len - 1 ] = '\0';
+                if ( CHK_ARG ( options, ARG_SEARCH_STRICT ) != 0 ) {
+                        strcpy ( query, needles [ i ] );
+                        strcat ( query, " - " );
+                        query [ len - 1 ] = '\0';
+                        substr = query;
+                } else
+                        substr = needles [ i ];
 
-                if ( ( ptr = strstr ( buffer, query ) ) != NULL ) {
+                if ( ( ptr = strstr ( buffer, substr ) ) != NULL ) {
                         if ( ( ptr = find_line_bounds ( buffer, ptr, &buffer ) )
                                         == NULL )
                                 break;
@@ -830,10 +838,10 @@ int main ( int argc, char ** argv )
 
         stack_init ( &repo_stack );
 
-        if ( CHK_BIT ( options, ARG_SHOW_VERSION ) != 0 )
+        if ( CHK_ARG ( options, ARG_SHOW_VERSION ) != 0 )
                 print_version_info ( );
 
-        if ( CHK_BIT ( options, ARG_SHOW_HELP ) != 0 ) {
+        if ( CHK_ARG ( options, ARG_SHOW_HELP ) != 0 ) {
                 print_help_info ( argv [ 0 ] );
                 return EXIT_SUCCESS;
         }

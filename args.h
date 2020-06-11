@@ -6,7 +6,7 @@
 
 #include <stdint.h>
 
-#define CHK_BIT(val, n) ( val &  n )
+#define CHK_ARG(val, n) ( val &  n )
 
 /* The following command-line options are currently recognised:
  *
@@ -25,7 +25,8 @@ enum arg_positions_t {
         ARG_PRINT_REPO_PATHS =  2,
         ARG_SHOW_HELP        =  4,
         ARG_SHOW_VERSION     =  8,
-        ARG_LIST_REPOS       = 16
+        ARG_LIST_REPOS       = 16,
+        ARG_SEARCH_STRICT    = 32  /* 6th bit */
 };
 
 extern uint8_t options;

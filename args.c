@@ -7,7 +7,7 @@
 
 #include "args.h"
 
-#define SET_BIT(val, n) ( val |= n )
+#define SET_ARG(val, n) ( val |= n )
 
 /* Would this be better with a single call to printf, perhaps in an inline
  * function ? */
@@ -49,9 +49,9 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
 {
         static const char * arg_full [ ] = {
                 "--repo-names", "--repo-paths", "--help", "--version",
-                "--list-repos"
+                "--list-repos", "--strict"
         }, * arg_abv [ ] = {
-                "-n", "-p", "-h", "-v", "-r"
+                "-n", "-p", "-h", "-v", "-r", "-s"
         };
 
         /* `fargc`: full argument count */
@@ -99,12 +99,12 @@ int process_args ( int argc, char ** argv, int * advanced_idx )
                         break; /* do not consider further arguments */
 
                 if ( match_arg ( argv [ i ], &apos ) == 0 ) {
-                        if ( CHK_BIT ( options, apos ) != 0 ) {
+                        if ( CHK_ARG ( options, apos ) != 0 ) {
                                 PREFIX_PRINT ( argv [ i ], ARGSTAT_DOUBLE );
                                 return -1;
                         }
 
-                        SET_BIT ( options, apos );
+                        SET_ARG ( options, apos );
                 } else {
                         PREFIX_PRINT ( argv [ i ], ARGSTAT_UNKNWN );
                         return -1;
