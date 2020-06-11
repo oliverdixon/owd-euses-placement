@@ -12,7 +12,7 @@
 #include "args.h"
 
 #define BUFFER_SZ ( 4096 )
-#define QUERY_MAX ( 256 )
+#define QUERY_MAX ( 256  )
 
 #define ASCII_MIN ( 0x20 )
 #define ASCII_MAX ( 0x7E )
@@ -104,16 +104,17 @@ static inline void print_version_info ( )
 /* print_help_info: pretty-print information regarding the possible command-
  * line arguments, with their abbreviated form and a brief description. */
 
-static inline void print_help_info ( )
+static inline void print_help_info ( const char * invocation )
 {
-        printf ( PROGRAM_NAME " command-line argument summary.\n"
+        printf ( PROGRAM_NAME " command-line argument summary.\n" \
+                        "Syntax: %s [options] substrings\n" \
                         "\n%-13s -%-3s\t%s\n%-13s -%-3s\t%s\n" \
                         "%-13s -%-3s\t%s\n%-13s -%-3s\t%s\n" \
-                        "%-13s -%-3s\t%s\n\n",
+                        "%-13s -%-3s\t%s\n", invocation,
                         "--list-repos", "r", "Prepend a list of located " \
                                 "repositories to the output.",
                         "--repo-names", "n", "Print repository names for " \
-                                "each match",
+                                "each match.",
                         "--repo-paths", "p", "Print repository names for " \
                                 "each match (implies --repo-names).",
                         "--help", "h", "Print this help information and exit.",
@@ -379,7 +380,9 @@ static enum status_t register_repo ( char base [ ], char * filename,
  * files) contained within `base` to the given. On success, this function
  * returns STATUS_OK, otherwise STATUS_ERRNO, in which case errno is set
  * appropriately. The file `gentoo.conf` must exist within the base directory;
- * if this is not the case, STATUS_NOGENR is returned.
+ * if this is not the case, STATUS_NOGENR is returned. If ARG_LIST_REPOS was set
+ * on the command-line, this function will pretty-print the repository stack and
+ * base directory on success.
  *
  * https://wiki.gentoo.org/wiki//etc/portage/repos.conf#Format */
 
@@ -412,7 +415,20 @@ static enum status_t enumerate_repo_descriptions ( char base [ ],
                 }
 
         dnull ( &dp );
-        return ( gentoo_hit ) ? STATUS_OK : STATUS_NOGENR;
+        if ( gentoo_hit ) {
+                /* print the repository stack, if appropriate */
+                if ( CHK_BIT ( options, ARG_LIST_REPOS ) != 0 ) {
+                        fputs ( "Configuration directory: ", stdout );
+                        puts ( base );
+                        putchar ( '\n' );
+                        stack_print ( stack );
+                        putchar ( '\n' );
+                }
+
+                return STATUS_OK;
+        }
+
+        return STATUS_NOGENR;
 }
 
 /* get_file_ext: returns the file extension---from the final '.' to the
@@ -775,8 +791,14 @@ int main ( int argc, char ** argv )
         }
 
         stack_init ( &repo_stack );
-        print_version_info ( ); /* TODO: this should be a command-line option */
-        print_help_info ( );    /* TODO: this should be a command-line option */
+
+        if ( CHK_BIT ( options, ARG_SHOW_VERSION ) != 0 )
+                print_version_info ( );
+
+        if ( CHK_BIT ( options, ARG_SHOW_HELP ) != 0 ) {
+                print_help_info ( argv [ 0 ] );
+                return EXIT_SUCCESS;
+        }
 
         if ( ( status = get_base_dir ( base ) != STATUS_OK ) ||
                         ( status = enumerate_repo_descriptions ( base,
@@ -788,9 +810,6 @@ int main ( int argc, char ** argv )
                 stack_cleanse ( &repo_stack );
                 return EXIT_FAILURE;
         }
-
-        stack_print ( &repo_stack ); /* TODO: this should also be optional */
-        putchar ( '\n' );
 
         /* TODO: split main to allow direct-printing to stderr, possibly with an
          * optional prefix. */
