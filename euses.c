@@ -528,10 +528,13 @@ static enum dir_status_t find_next_desc_file ( char repo_base [ PATH_MAX ],
 
         do {
                 if ( ( dir = readdir ( *dp ) ) == NULL ) {
-                        if ( errno != 0 )
+                        if ( errno != 0 ) {
                                 /* On reaching the end of the stream,
                                  * errno has changed to indicate an error. */
+                                populate_error_buffer ( repo_base );
                                 return DIRSTAT_ERRNO;
+                        }
+
                         return DIRSTAT_DONE;
                 }
 
@@ -540,6 +543,7 @@ static enum dir_status_t find_next_desc_file ( char repo_base [ PATH_MAX ],
                                 strcmp ( ext, "desc" ) != 0 ) );
 
         if ( strlen ( repo_base ) + strlen ( dir->d_name ) >= PATH_MAX ) {
+                populate_error_buffer ( repo_base );
                 errno = ENAMETOOLONG;
                 return DIRSTAT_ERRNO;
         }
@@ -558,6 +562,7 @@ static enum dir_status_t find_next_desc_file ( char repo_base [ PATH_MAX ],
 static int open_profiles_path ( char path [ PATH_MAX ], DIR ** dp )
 {
         if ( strlen ( PROFILES_SUFFIX ) + strlen ( path ) >= PATH_MAX ) {
+                populate_error_buffer ( path );
                 errno = ENAMETOOLONG;
                 return -1;
         }
@@ -633,6 +638,7 @@ static enum buffer_status_t populate_buffer ( char * path,
 
                 /* the buffer has not been filled because there was an error
                  * with fread, the details of which were written to errno */
+                populate_error_buffer ( path );
                 fnull ( & ( b_inf->fp ) );
                 return BUFSTAT_ERRNO;
         }
@@ -858,7 +864,6 @@ static enum status_t search_files ( struct repo_stack_t * stack,
                         switch ( bi.status = populate_buffer ( repo->location,
                                                 &bi ) ) {
                                 case BUFSTAT_ERRNO:
-                                        fputs ( strerror ( errno ), stderr );
                                         free ( repo );
                                         dnull ( &dp );
                                         return STATUS_ERRNO;
@@ -967,10 +972,11 @@ int main ( int argc, char ** argv )
         struct repo_stack_t repo_stack;
         enum status_t status = STATUS_OK;
         int arg_idx = 0;
+
         error_buffer [ 0 ] = '\0';
 
         if ( process_args ( argc, argv, &arg_idx ) == -1 )
-                return EXIT_FAILURE;
+                return EXIT_FAILURE; /* process_args invokes print_error */
 
         if ( CHK_ARG ( options, ARG_SHOW_VERSION ) != 0 )
                 print_version_info ( );
@@ -980,21 +986,19 @@ int main ( int argc, char ** argv )
                 return EXIT_SUCCESS; /* show help and quit */
         }
 
+        /* push the repositories onto the stack */
         if ( ( status = get_repos ( base, &repo_stack ) ) ) {
                 print_error ( "Could not use the repository-description " \
                                 "base directory.", status, &provide_error );
                 return EXIT_FAILURE;
         }
 
+        /* buffer and search the repository USE-description files */
         if ( argc - arg_idx > 0 && ( status = search_files ( &repo_stack, & (
                                                 argv [ arg_idx ] ), argc -
                                         arg_idx ) ) != STATUS_OK ) {
-                /* TODO: improved error-reporting not yet implemented past
-                 * get_repos. */
-                fputs ( "Could not load the USE-description files:\n\t",
-                                stderr );
-                fputs ( provide_error ( status ), stderr );
-                fputc ( '\n', stderr );
+                print_error ( "Could not load the USE-description files",
+                                status, &provide_error );
                 stack_cleanse ( &repo_stack );
                 return EXIT_FAILURE;
         }

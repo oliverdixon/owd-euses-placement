@@ -9,8 +9,6 @@ moderately simple to drastically improve for the Beta release.
 
 Inexhaustive TODO list for the next major release:
 
-        [ ] Improve the error-reporting situation  to  provide  the  problematic
-                file path, in addition to the error.
         [ ] Increase the number of  files  searched  to  include  profiles/desc/
                 *.desc; this will drastically increase the search yield. Perhaps
                 the user could be given slightly more  control  regarding  which
