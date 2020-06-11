@@ -22,6 +22,7 @@
 #define CONFIGROOT_DEFAULT "/etc/portage"
 #define PORTAGE_MAKECONF   "/make.conf" /* to be appended to the config root */
 #define PROFILES_SUFFIX    "/profiles/"
+#define DEFAULT_REPO_NAME  "gentoo"
 
 enum status_t {
         STATUS_OK     =  0, /* everything is OK */
@@ -84,7 +85,7 @@ static const char * provide_error ( enum status_t status )
                 case STATUS_INILCS: return "A repository-description file" \
                                         "contains an unwieldy location value.";
                 case STATUS_BADARG: return "Inadequate command-line arguments" \
-                                        " were provided.";
+                                        " were provided. Try \"-h\".";
 
                 default: return "Unknown error";
         }
@@ -103,7 +104,10 @@ static inline void print_version_info ( )
 }
 
 /* print_help_info: pretty-print information regarding the possible command-
- * line arguments, with their abbreviated form and a brief description. */
+ * line arguments, with their abbreviated form and a brief description.
+ *
+ * Use this format-specifier for adding argument documentation:
+ * "--%-13s -%-3s\t%s\n" with "<long name>", "<shortname>", "<description>". */
 
 static inline void print_help_info ( const char * invocation )
 {
@@ -114,7 +118,7 @@ static inline void print_help_info ( const char * invocation )
                         "--%-13s -%-3s\t%s\n--%-13s -%-3s\t%s\n" \
                         "--%-13s -%-3s\t%s\n", invocation,
                         "list-repos", "r", "Prepend a list of located " \
-                                "repositories to the output.",
+                                "repositories (repos.conf/ only).",
                         "repo-names", "n", "Print repository names for " \
                                 "each match.",
                         "repo-paths", "p", "Print repository names for " \
@@ -861,10 +865,27 @@ static enum status_t get_repos ( char base [ PATH_MAX ],
                 struct repo_stack_t * stack )
 {
         enum status_t status = STATUS_OK;
+        char * portdir_val = NULL;
+        struct repo_t * tmp_repo = NULL;
+
         stack_init ( stack );
 
-        if ( getenv ( "PORTDIR" ) != NULL )
-                portdir_complain ( );
+        /* PORTDIR environment variable */
+        if ( ( portdir_val = getenv ( "PORTDIR" ) ) != NULL )
+                if ( ( tmp_repo = malloc ( sizeof ( struct repo_t ) ) )
+                                != NULL ) {
+                        strcpy ( tmp_repo->name, DEFAULT_REPO_NAME );
+
+                        if ( strlen ( portdir_val ) < PATH_MAX ) {
+                                strcpy ( tmp_repo->location, portdir_val );
+                                stack_push ( stack, tmp_repo );
+                                portdir_complain ( );
+
+                                return STATUS_OK;
+                        }
+
+                        free ( tmp_repo );
+                }
 
         /* Use repos.conf/ */
         if ( ( status = get_base_dir ( base ) != STATUS_OK ) ||
