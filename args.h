@@ -26,7 +26,8 @@ enum arg_positions_t {
         ARG_SHOW_HELP        =  4,
         ARG_SHOW_VERSION     =  8,
         ARG_LIST_REPOS       = 16,
-        ARG_SEARCH_STRICT    = 32  /* 6th bit */
+        ARG_SEARCH_STRICT    = 32,
+        ARG_NO_COMPLAINING   = 64  /* 7th bit */
 };
 
 extern uint8_t options;

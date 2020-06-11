@@ -20,7 +20,8 @@
 #define CONFIGROOT_ENVNAME "PORTAGE_CONFIGROOT"
 #define CONFIGROOT_SUFFIX  "/repos.conf/"
 #define CONFIGROOT_DEFAULT "/etc/portage"
-#define PROFILES_SUFFIX "/profiles/"
+#define PORTAGE_MAKECONF   "/make.conf" /* to be appended to the config root */
+#define PROFILES_SUFFIX    "/profiles/"
 
 enum status_t {
         STATUS_OK     =  0, /* everything is OK */
@@ -108,20 +109,22 @@ static inline void print_help_info ( const char * invocation )
 {
         printf ( PROGRAM_NAME " command-line argument summary.\n" \
                         "Syntax: %s [options] substrings\n" \
-                        "\n%-13s -%-3s\t%s\n%-13s -%-3s\t%s\n" \
-                        "%-13s -%-3s\t%s\n%-13s -%-3s\t%s\n" \
-                        "%-13s -%-3s\t%s\n%-13s -%-3s\t%s\n", invocation,
-                        "--list-repos", "r", "Prepend a list of located " \
+                        "\n--%-13s -%-3s\t%s\n--%-13s -%-3s\t%s\n" \
+                        "--%-13s -%-3s\t%s\n--%-13s -%-3s\t%s\n" \
+                        "--%-13s -%-3s\t%s\n--%-13s -%-3s\t%s\n" \
+                        "--%-13s -%-3s\t%s\n", invocation,
+                        "list-repos", "r", "Prepend a list of located " \
                                 "repositories to the output.",
-                        "--repo-names", "n", "Print repository names for " \
+                        "repo-names", "n", "Print repository names for " \
                                 "each match.",
-                        "--repo-paths", "p", "Print repository names for " \
-                                "each match (implies --repo-names).",
-                        "--help", "h", "Print this help information and exit.",
-                        "--version", "v", "Prepend version and license " \
+                        "repo-paths", "p", "Print repository names for " \
+                                "each match (implies repo-names).",
+                        "help", "h", "Print this help information and exit.",
+                        "version", "v", "Prepend version and license " \
                                 "information to the output.",
-                        "--strict", "s", "Search only in the flag field, " \
-                                "and exclude the description." );
+                        "strict", "s", "Search only in the flag field, " \
+                                "excluding the description.",
+                        "quiet", "q", "Do not complain about PORTDIR." );
 }
 
 /* fnull: close and null a non-null file pointer. */
@@ -229,9 +232,8 @@ static char * skip_whitespace ( char * str )
  * STATUS_INILOC is returned. */
 
 static enum status_t ini_get_location ( char location [ PATH_MAX ],
-                char buffer [ BUFFER_SZ ] )
+                char buffer [ BUFFER_SZ ], const char * key )
 {
-        const char * key = "location";
         char * start = strstr ( buffer, key ), * end = NULL;
         int keyvalue_found = 0;
 
@@ -332,7 +334,7 @@ static enum status_t parse_repo_description ( struct repo_t * repo,
                                 ini_get_name ( repo->name, buffer, &offset ) )
                         != STATUS_OK || ( status = 
                                 ini_get_location ( repo->location,
-                                        & ( buffer [ offset ] ) ) )
+                                        & ( buffer [ offset ] ), "location" ) )
                         != STATUS_OK )
                 return status;
 
@@ -723,8 +725,6 @@ static void search_buffer ( char buffer [ BUFFER_SZ ], char ** needles,
                         continue;
                 }
 
-                /* This should probably be an option: "strict" ?
-                 * Otherwise, just pass the raw needle into strstr. */
                 if ( CHK_ARG ( options, ARG_SEARCH_STRICT ) != 0 ) {
                         strcpy ( query, needles [ i ] );
                         strcat ( query, " - " );
@@ -823,6 +823,58 @@ static enum status_t search_files ( struct repo_stack_t * stack,
         return STATUS_OK;
 }
 
+static inline void portdir_complain (  )
+{
+        if ( CHK_ARG ( options, ARG_NO_COMPLAINING ) != 0 )
+                return; /* this will be inlined, so it's not _that_ terrible */
+
+        fputs ( "WARNING: " PROGRAM_NAME " has detected the existence of " \
+                        "PORTDIR,\neither as an environment variable, or " \
+                        "existing in " PORTAGE_MAKECONF ".\nIt will be " \
+                        "respected over the repos.conf/ format for this\n" \
+                        "session, however to remove this warning from each " \
+                        "run of\n" PROGRAM_NAME ", please remove all traces " \
+                        "of it from your system\nand adopt the new, more " \
+                        "flexible syntax.\n\n", stderr  );
+}
+
+/* get_repos: populate the stack with a list of repositories, returning
+ * STATUS_OK on success; confer with get_base_dir, enumerate_repo_descriptions,
+ * and their derivatives for more explicit information regrading the potential
+ * errors. TODO (P.I.) This function first attempts to find the deprecated
+ * PORTDIR value, either as an environment value, or as a key-value pair
+ * in PORTAGE_MAKECONF. If this is found, it is used in favour of repos.conf/,
+ * but a warning is issued as a means of encouraging users to drop deprecated
+ * features. If, for any reason, PORTDIR cannot be taken from one of the two
+ * sources, the standard repos.conf/ mechanism is used.
+ *
+ * If this function is successful, it dynamically allocates some memory for each
+ * of the encountered repositories and pushes them to the `stack`, which can be
+ * recursively cleaned/freed with stack_cleanse. If it fails at any stage, the
+ * caller needn't free the stack. If the PORTDIR mechanism is used, the stack
+ * contains one item, as PORTDIR-era systems did not facilitate multiple Portage
+ * repositories. */
+
+static enum status_t get_repos ( char base [ PATH_MAX ],
+                struct repo_stack_t * stack )
+{
+        enum status_t status = STATUS_OK;
+        stack_init ( stack );
+
+        if ( getenv ( "PORTDIR" ) != NULL )
+                portdir_complain ( );
+
+        /* Use repos.conf/ */
+        if ( ( status = get_base_dir ( base ) != STATUS_OK ) ||
+                        ( status = enumerate_repo_descriptions ( base, stack ) )
+                        != STATUS_OK ) {
+                stack_cleanse ( stack );
+                return status;
+        }
+
+        return STATUS_OK;
+}
+
 int main ( int argc, char ** argv )
 {
         char base [ PATH_MAX ];
@@ -836,8 +888,6 @@ int main ( int argc, char ** argv )
                 return EXIT_FAILURE;
         }
 
-        stack_init ( &repo_stack );
-
         if ( CHK_ARG ( options, ARG_SHOW_VERSION ) != 0 )
                 print_version_info ( );
 
@@ -846,14 +896,11 @@ int main ( int argc, char ** argv )
                 return EXIT_SUCCESS;
         }
 
-        if ( ( status = get_base_dir ( base ) != STATUS_OK ) ||
-                        ( status = enumerate_repo_descriptions ( base,
-                                &repo_stack ) ) != STATUS_OK ) {
+        if ( ( status = get_repos ( base, &repo_stack ) ) ) {
                 fputs ( "Could not use the repository-description " \
                                 "base directory:\n\t", stderr );
                 fputs ( provide_error ( status ), stderr );
                 fputc ( '\n', stderr );
-                stack_cleanse ( &repo_stack );
                 return EXIT_FAILURE;
         }
 
