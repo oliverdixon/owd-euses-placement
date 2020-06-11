@@ -148,9 +148,11 @@ static inline void print_version_info ( )
         puts ( "This is " PROGRAM_NAME ", v. " PROGRAM_VERSION " by "
                         PROGRAM_AUTHOR " (" PROGRAM_YEAR ").\nFor support, " 
                         "send e-mail to " PROGRAM_AUTHOR " <"
-                        PROGRAM_AUTHOR_EMAIL ">.\n\nThis code is licensed under"
-                        " the " PROGRAM_LICENCE_NAME ",\nthe details of which "
-                        "can be found at " PROGRAM_LICENCE_URL ".\n" );
+                        PROGRAM_AUTHOR_EMAIL ">.\n\nThe source code " \
+                        "repository and tarballs are available on-line " \
+                        "at\n" PROGRAM_URL ". The code is licensed under" \
+                        "\nthe " PROGRAM_LICENCE_NAME ", the details of " \
+                        "which can be found at\n" PROGRAM_LICENCE_URL ".\n" );
 }
 
 /* print_help_info: pretty-print information regarding the possible command-
@@ -917,11 +919,11 @@ static inline void portdir_complain (  )
 
         fputs ( "WARNING: " PROGRAM_NAME " has detected the existence of " \
                         "PORTDIR,\neither as an environment variable, or " \
-                        "existing in " PORTAGE_MAKECONF ".\nIt will be " \
-                        "respected over the repos.conf/ format for this\n" \
-                        "session, however to remove this warning from each " \
-                        "run of\n" PROGRAM_NAME ", please remove all traces " \
-                        "of it from your system\nand adopt the new, more " \
+                        "existing in a Portage\nconfiguration file. It will be " \
+                        "respected over the repos.conf/\nformat for this " \
+                        "session, however to remove this warning from\neach " \
+                        "run of" PROGRAM_NAME ", please remove all traces " \
+                        "of it from your\nsystem and adopt the new, more " \
                         "flexible syntax.\n\n", stderr );
 
         if ( CHK_ARG ( options, ARG_LIST_REPOS ) != 0 )
