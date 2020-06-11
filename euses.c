@@ -908,7 +908,9 @@ static enum status_t search_files ( struct repo_stack_t * stack,
 
 /* portdir_complain: providing the absence of the ARG_NO_COMPLAINING flag, this
  * function prints a pre-defined warning regarding the existence of the now-
- * deprecated PORTDIR environment variable/make.conf attribute. */
+ * deprecated PORTDIR environment variable/make.conf attribute. If the
+ * ARG_LIST_REPOS option is set, a warning is also sent to stderr, announcing
+ * that the existence of PORTDIR disables the listing feature. */
 
 static inline void portdir_complain (  )
 {
@@ -922,7 +924,12 @@ static inline void portdir_complain (  )
                         "session, however to remove this warning from each " \
                         "run of\n" PROGRAM_NAME ", please remove all traces " \
                         "of it from your system\nand adopt the new, more " \
-                        "flexible syntax.\n\n", stderr  );
+                        "flexible syntax.\n\n", stderr );
+
+        if ( CHK_ARG ( options, ARG_LIST_REPOS ) != 0 )
+                fputs ( "WARNING: Disregarding the repository-listing request" \
+                                " due to the\npresence of PORTDIR.\n\n",
+                                stderr );
 }
 
 /* construct_path: copy `a` to `dest`, and then append `b`. This function
@@ -951,9 +958,9 @@ static int construct_path ( char * dest, const char * a, const char * b )
 
 /* portdir_makeconf: attempt to extract the value from the "PORTDIR" key-value
  * pair in $PORTAGE_CONFIGROOT/make.conf. On success, this function returns
- * STATUS_OK, and appropriately populates the error buffer on failure. The
- * caller can determine whether a key has been found by testing the first
- * character of `value` for a null-terminator. */
+ * STATUS_OK. The caller can determine whether a key has been found by testing
+ * the first character of `value` for a null-terminator. There is no requirement
+ * to confer with the error buffer here, as errors are non-fatal. */
 
 static enum status_t portdir_makeconf ( char base [ PATH_MAX ],
                 char value [ PATH_MAX ] )
@@ -962,18 +969,17 @@ static enum status_t portdir_makeconf ( char base [ PATH_MAX ],
         FILE * fp = NULL;
         enum status_t status = STATUS_OK;
 
-        if ( construct_path ( value, base, PORTAGE_MAKECONF ) == -1 )
-                return STATUS_ERRNO;
-
-        if ( ( fp = fopen ( value, "r" ) ) == NULL ) {
-                populate_error_buffer ( value );
+        if ( construct_path ( value, base, PORTAGE_MAKECONF ) == -1 ||
+                        ( fp = fopen ( value, "r" ) ) == NULL ) {
+                value [ 0 ] = '\0';
                 return STATUS_ERRNO;
         }
+
+        value [ 0 ] = '\0';
 
         if ( fread ( buffer, sizeof ( char ), PATH_MAX - 1, fp ) <
                         PATH_MAX - 1 && ! feof ( fp ) ) {
                 fclose ( fp );
-                populate_error_buffer ( value );
                 return STATUS_ERRNO;
         }
 
@@ -984,7 +990,6 @@ static enum status_t portdir_makeconf ( char base [ PATH_MAX ],
                 if ( status == STATUS_INILOC )
                         return STATUS_OK; /* not found */
 
-                populate_error_buffer ( PORTAGE_MAKECONF );
                 return status;
         } else
                 /* Extraneous hyphens make no difference when placed as prefixes
@@ -1023,6 +1028,37 @@ static int portdir_attempt_envvar ( struct repo_stack_t * stack )
         return -1;
 }
 
+/* portdir_attempt_file: this function exhibits very similar behaviour to
+ * portdir_attempt_envvar, except it confers with a file instead of the
+ * environment variables. Similar to portdir_attempt_envvar, this function can
+ * dynamically allocate some memory on the stack (free with stack_cleanse), and
+ * errors should not be treat as fatal. */
+
+static int portdir_attempt_file ( struct repo_stack_t * stack,
+                char base [ PATH_MAX ] )
+{
+        struct repo_t * tmp_repo = NULL;
+
+        if ( ( tmp_repo = malloc ( sizeof ( struct repo_t ) ) ) != NULL ) {
+                if ( portdir_makeconf ( base, tmp_repo->location )
+                                != STATUS_OK ) {
+                        free ( tmp_repo );
+                        return -1;
+                }
+
+                if ( tmp_repo->location [ 0 ] != '\0' ) {
+                        strcpy ( tmp_repo->name, DEFAULT_REPO_NAME );
+                        stack_push ( stack, tmp_repo );
+                        portdir_complain ( );
+
+                        return 0;
+                } else
+                        free ( tmp_repo );
+        }
+
+        return -1;
+}
+
 /* get_repos: populate the stack with a list of repositories, returning
  * STATUS_OK on success; confer with get_base_dir, enumerate_repo_descriptions,
  * and their derivatives for more explicit information regrading the potential
@@ -1044,34 +1080,15 @@ static enum status_t get_repos ( char base [ PATH_MAX ],
                 struct repo_stack_t * stack )
 {
         enum status_t status = STATUS_OK;
-        struct repo_t * tmp_repo = NULL;
-
         stack_init ( stack );
 
         if ( ( status = get_base_dir ( base ) ) != STATUS_OK )
                 return status;
 
-        /* Try the PORTDIR environment variable. */
-        if ( portdir_attempt_envvar ( stack ) == 0 )
+        /* Try the PORTDIR environment variable followed by make.conf. */
+        if ( portdir_attempt_envvar ( stack ) == 0 ||
+                        portdir_attempt_file ( stack, base ) == 0 ) {
                 return STATUS_OK; /* successfully pushed to stack */
-
-        /* Try the make.conf file. */
-
-        if ( ( tmp_repo = malloc ( sizeof ( struct repo_t ) ) ) != NULL ) {
-                if ( ( status = portdir_makeconf ( base, tmp_repo->location ) )
-                                != STATUS_OK ) {
-                        free ( tmp_repo );
-                        return status;
-                }
-
-                if ( tmp_repo->location [ 0 ] != '\0' ) {
-                        strcpy ( tmp_repo->name, DEFAULT_REPO_NAME );
-                        stack_push ( stack, tmp_repo );
-                        portdir_complain ( );
-
-                        return STATUS_OK;
-                } else
-                        free ( tmp_repo );
         }
 
         /* Use repos.conf/ */
