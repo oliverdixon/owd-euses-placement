@@ -1,0 +1,66 @@
+.TH ASH-EUSES 1 2020-06-11 git.suugaku.co.uk "General Commands Manual"
+.SH NAME
+ash-euses \- a rewrite of
+.BR euses(1) " for modern Gentoo-like systems"
+.SH SYNOPSIS
+.B ash-euses
+.RI "[" "OPTIONS" "]... [" SUBSTRING "]..."
+.SH DESCRIPTION
+.BR ash-euses " searches for substrings in USE-description files in the "
+various repositories, as enumerated by the contents of the
+.IB PORTAGE_CONFIGROOT /repos.conf/
+directory. Each regular file in the directory is assumed to be a
+repository-description and parsed, extracting the
+.BR location " attribute to find the base of the repository. Most users will"
+only care about the
+.BR ::gentoo " repository, however"
+.BR ash-euses " is capable of scanning an arbitrary number of repositories."
+.IR PORTDIR " is also respected as an environment variable or entry in"
+.BR make.conf ", however it is highly discouraged due to deprecation by the "
+Gentoo developers.
+
+.BR ash-euses " scans files matching"
+.IB BASE /profiles/*.desc
+where
+.IR BASE " is the value from the"
+.BR location " attribute. Currently, it does not recurse into the " base/
+directory, however this is planned for the reasonably immediate future.
+.SH OPTIONS
+.TP
+.BR "\-\-help", " \-h"
+Print a short summary of the syntax commands and quit.
+.TP
+.BR "\-\-version", " \-v"
+Prepend the output with the versioning, author, and licence information.
+.TP
+.BR "\-\-list\-repos", " \-r"
+Prepend the output with a list of the repository names and locations, collected
+from the configuration files in the
+.IB PORTAGE_CONFIGROOT /repos.conf/
+directory.
+.TP
+.BR "\-\-repo\-names", " \-n"
+Append the repository name to every match, in the form of
+.BI :: repo
+.RI where " repo"
+is the name taken from the repository-configuration file.
+.TP
+.BR "\-\-repo\-paths", " \-p " "(implies " \-\-repo\-names )
+Append the repository name and file location on a new line to each match, in the
+form
+.BI (:: repo " => " file )
+.RI "where " file 
+is the path of the description file in which the match was found.
+.TP
+.BR "\-\-strict", " \-s"
+Restrict the searching to the USE-flag field, as opposed to searching the entire
+file. This will significantly reduce the yield of the search on most systems.
+This behaviour is likely to become the default in the near future, replaced with
+.RB a " \-\-lax" " option".
+.TP
+.BR "\-\-quiet", " \-q"
+.RI "Suppress the complaint message that arises when " PORTDIR " is detected"
+.RB "on the system. See " NOTES " for more information regarding the issues of"
+.IR PORTDIR " on modern Gentoo-like systems."
+.SH AUTHOR
+.RI "Ashley Dixon <" ash@suugaku.co.uk >
