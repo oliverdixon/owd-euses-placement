@@ -201,27 +201,28 @@ static inline void dnull ( DIR ** dp )
         }
 }
 
-/* get_base_dir: populates `base` with the Portage configuration root (usually
- * CONFIGROOT_DEFAULT) prepended to the CONFIGROOT_SUFFIX. On returning zero,
- * `base` contains the base directory of the various repository-description
- * files. If -1 is returned, the base path would exceed the limit defined by
- * PATH_MAX; errno is set appropriately. */
+/* construct_path: copy `a` to `dest`, and then append `b`. This function
+ * returns zero on success, or -1 on failure. In the latter case, errno is set
+ * appropriately and the error buffer is populated with `b`. The destination
+ * string is null-terminated on success, and truncated to zero on failure. */
 
-static enum status_t get_base_dir ( char base [ PATH_MAX ] )
+static int construct_path ( char * dest, const char * a, const char * b )
 {
-        char * base_ptr = NULL;
+        size_t len = 0;
+        dest [ 0 ] = '\0';
 
-        strcpy ( base, ( base_ptr = getenv ( CONFIGROOT_ENVNAME ) ) != NULL ?
-                        base_ptr : CONFIGROOT_DEFAULT );
-
-        if ( strlen ( base ) + strlen ( CONFIGROOT_SUFFIX ) >= PATH_MAX - 1 ) {
-                populate_error_buffer ( base );
+        if ( ( len = strlen ( a ) + strlen ( b ) ) >= PATH_MAX - 1 ) {
+                populate_error_buffer ( b );
                 errno = ENAMETOOLONG;
-                return STATUS_ERRNO;
+                dest [ 0 ] = '\0';
+                return -1;
         }
 
-        strcat ( base, CONFIGROOT_SUFFIX );
-        return STATUS_OK;
+        dest [ len - 1 ] = '\0';
+        strcpy ( dest, a );
+        strcat ( dest, b );
+
+        return 0;
 }
 
 /* ini_get_name: retrieve the repository name from the description file; this is
@@ -422,7 +423,6 @@ static enum status_t register_repo ( char base [ ], char * filename,
                 struct repo_stack_t * stack )
 {
         struct repo_t * repo = malloc ( sizeof ( struct repo_t ) );
-        unsigned int len = 0;
         enum status_t status = STATUS_OK;
         char desc_path [ PATH_MAX ];
 
@@ -431,16 +431,10 @@ static enum status_t register_repo ( char base [ ], char * filename,
                 return STATUS_ERRNO;
         }
 
-        if ( ( len = strlen ( filename ) + strlen ( base ) ) >= PATH_MAX ) {
-                populate_error_buffer ( filename );
+        if ( construct_path ( desc_path, base, filename ) == -1 ) {
                 free ( repo );
-                errno = ENAMETOOLONG;
                 return STATUS_ERRNO;
         }
-
-        strcpy ( desc_path, base );
-        strcat ( desc_path, filename );
-        desc_path [ len ] = '\0';
 
         if ( ( status = parse_repo_description ( repo, desc_path ) )
                         != STATUS_OK ) {
@@ -556,8 +550,10 @@ static enum dir_status_t find_next_desc_file ( char repo_base [ PATH_MAX ],
         } while ( dir->d_type != DT_REG || ( !ext ||
                                 strcmp ( ext, "desc" ) != 0 ) );
 
-        if ( strlen ( repo_base ) + strlen ( dir->d_name ) >= PATH_MAX ) {
-                populate_error_buffer ( repo_base );
+        if ( strlen ( repo_base ) + strlen ( dir->d_name ) >= PATH_MAX - 1 ) {
+                /* Do not use `construct_path` here, as it is a concatenation,
+                 * and not a simple construction. */
+                populate_error_buffer ( dir->d_name );
                 errno = ENAMETOOLONG;
                 return DIRSTAT_ERRNO;
         }
@@ -575,7 +571,9 @@ static enum dir_status_t find_next_desc_file ( char repo_base [ PATH_MAX ],
 
 static int open_profiles_path ( char path [ PATH_MAX ], DIR ** dp )
 {
-        if ( strlen ( PROFILES_SUFFIX ) + strlen ( path ) >= PATH_MAX ) {
+        if ( strlen ( PROFILES_SUFFIX ) + strlen ( path ) >= PATH_MAX - 1 ) {
+                /* Do not use `construct_path` here, as it is a concatenation,
+                 * and not a simple construction. */
                 populate_error_buffer ( path );
                 errno = ENAMETOOLONG;
                 return -1;
@@ -932,30 +930,6 @@ static inline void portdir_complain (  )
                                 stderr );
 }
 
-/* construct_path: copy `a` to `dest`, and then append `b`. This function
- * returns zero on success, or -1 on failure. In the latter case, errno is set
- * appropriately and the error buffer is populated with `b`.
- *
- * TODO: convert the entire program to use this general function. */
-
-static int construct_path ( char * dest, const char * a, const char * b )
-{
-        size_t len = 0;
-        dest [ 0 ] = '\0';
-
-        if ( ( len = strlen ( a ) + strlen ( b ) ) >= PATH_MAX - 1 ) {
-                populate_error_buffer ( b );
-                errno = ENAMETOOLONG;
-                return -1;
-        }
-
-        dest [ len - 1 ] = '\0';
-        strcpy ( dest, a );
-        strcat ( dest, b );
-
-        return 0;
-}
-
 /* portdir_makeconf: attempt to extract the value from the "PORTDIR" key-value
  * pair in $PORTAGE_CONFIGROOT/make.conf. On success, this function returns
  * STATUS_OK. The caller can determine whether a key has been found by testing
@@ -970,10 +944,8 @@ static enum status_t portdir_makeconf ( char base [ PATH_MAX ],
         enum status_t status = STATUS_OK;
 
         if ( construct_path ( value, base, PORTAGE_MAKECONF ) == -1 ||
-                        ( fp = fopen ( value, "r" ) ) == NULL ) {
-                value [ 0 ] = '\0';
+                        ( fp = fopen ( value, "r" ) ) == NULL )
                 return STATUS_ERRNO;
-        }
 
         value [ 0 ] = '\0';
 
@@ -1080,10 +1052,15 @@ static enum status_t get_repos ( char base [ PATH_MAX ],
                 struct repo_stack_t * stack )
 {
         enum status_t status = STATUS_OK;
+        char * base_ptr = NULL;
         stack_init ( stack );
 
-        if ( ( status = get_base_dir ( base ) ) != STATUS_OK )
-                return status;
+        /* construct the base path */
+        if ( construct_path ( base, ( base_ptr = getenv ( CONFIGROOT_ENVNAME ) )
+                                != NULL ? base_ptr : CONFIGROOT_DEFAULT,
+                        CONFIGROOT_SUFFIX ) == -1 )
+                return STATUS_ERRNO;
+
 
         /* Try the PORTDIR environment variable followed by make.conf. */
         if ( portdir_attempt_envvar ( stack ) == 0 ||
