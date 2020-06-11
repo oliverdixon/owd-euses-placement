@@ -642,23 +642,21 @@ static char * find_line_bounds ( char * buffer_start, char * substr_start,
         assert ( key_idx >= 0 );
 
         if ( key_idx != 0 ) {
+                /* This not is the first entry in the buffer. */
                 tmp = buffer_start [ key_idx ];
                 buffer_start [ key_idx ] = '\0';
-        }
 
-        if ( ( start = strrchr ( buffer_start, '\n' ) ) == NULL ||
-                        *start == '\n' )
-                /* The entry was not preceded with a newline; it's safe to
-                 * assume that this is the first entry in the buffer. */
+                if ( ( start = strrchr ( buffer_start, '\n' ) ) == NULL )
+                        start = buffer_start;
+                else if ( * ( start++ ) == '\0' ) {
+                        /* the entry legitimate/poorly formatted */
+                        buffer_start [ key_idx ] = tmp;
+                        return NULL;
+                }
+
+                buffer_start [ key_idx ] = tmp;
+        } else
                 start = buffer_start;
-        else if ( * ( start++ ) == '\0' ) {
-                /* the entry legitimate/poorly formatted */
-                buffer_start [ key_idx ] = tmp;
-                return NULL;
-        }
-
-        if ( key_idx != 0 )
-                buffer_start [ key_idx ] = tmp;
 
         end = strchr ( substr_start, '\n' );
         *marker = end; /* marker is set to NULL if there's no closing newline */
@@ -822,6 +820,10 @@ static enum status_t search_files ( struct repo_stack_t * stack,
 
         return STATUS_OK;
 }
+
+/* portdir_complain: providing the absence of the ARG_NO_COMPLAINING flag, this
+ * function prints a pre-defined warning regarding the existence of the now-
+ * deprecated PORTDIR environment variable/make.conf attribute. */
 
 static inline void portdir_complain (  )
 {
