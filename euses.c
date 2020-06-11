@@ -10,6 +10,7 @@
 
 #include "euses.h"
 #include "args.h"
+#include "error.h"
 
 #define BUFFER_SZ ( 4096 )
 #define QUERY_MAX ( 256  )
@@ -968,10 +969,7 @@ int main ( int argc, char ** argv )
         int arg_idx = 0;
         error_buffer [ 0 ] = '\0';
 
-        if ( argc < 2 || process_args ( argc, argv, &arg_idx ) == -1 )
-                /* `process_args` provides its own error messages with
-                 * print_error, however perhaps this should be changed ?
-                 * TODO: consider. */
+        if ( process_args ( argc, argv, &arg_idx ) == -1 )
                 return EXIT_FAILURE;
 
         if ( CHK_ARG ( options, ARG_SHOW_VERSION ) != 0 )
@@ -992,7 +990,7 @@ int main ( int argc, char ** argv )
                                                 argv [ arg_idx ] ), argc -
                                         arg_idx ) ) != STATUS_OK ) {
                 /* TODO: improved error-reporting not yet implemented past
-                 * get_repos or for the argument-processor. */
+                 * get_repos. */
                 fputs ( "Could not load the USE-description files:\n\t",
                                 stderr );
                 fputs ( provide_error ( status ), stderr );

@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "euses.h"
+#include "error.h"
 #include "args.h"
 
 #define SET_ARG(val, n) ( val |= n )
@@ -13,7 +13,8 @@
 enum argument_status_t {
         ARGSTAT_OK     =  0, /* everything is OK */
         ARGSTAT_DOUBLE = -1, /* an argument would doubly defined */
-        ARGSTAT_UNKNWN = -2  /* the provided argument was unknown */
+        ARGSTAT_UNKNWN = -2, /* the provided argument was unknown */
+        ARGSTAT_LACK   = -3  /* not enough arguments were provided */
 };
 
 uint8_t options = 0;
@@ -27,6 +28,8 @@ static const char * provide_arg_error ( int status )
                 case ARGSTAT_OK:     return "Everything is OK.";
                 case ARGSTAT_DOUBLE: return "Argument was doubly defined.";
                 case ARGSTAT_UNKNWN: return "Argument was unrecognised.";
+                case ARGSTAT_LACK:   return "Not enough arguments were " \
+                                        "provided.";
 
                 default:             return "Unknown error";
         }
@@ -67,13 +70,13 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
 
 /* process_args: process the argument list in `argv` and populate the `options`
  * global variable accordingly. This function, due to its notability, produces
- * its own error functions directly to the appropriate output buffer, and
- * returns zero to indicate success, and -1 to indicate failure. The caller
- * should probably quit the program with an unsuccessful status code in the
- * event of the latter, as `options` may be incomplete and produce strange
- * results in later execution. On success, `advanced_idx` is set to the index of
- * the next, non-argument option in `argv`. The new `argc` could be calculated
- * by the caller with `argc - advanced_idx`.
+ * its own error functions directly to the appropriate output buffer (via
+ * print_error), and returns zero to indicate success, and -1 to indicate
+ * failure. The caller should probably quit the program with an unsuccessful
+ * status code in the event of the latter, as `options` may be incomplete and
+ * produce strange results in later execution. On success, `advanced_idx` is set
+ * to the index of the next, non-argument option in `argv`. The new `argc` could
+ * be calculated by the caller with `argc - advanced_idx`.
  *
  * If "--", or an argument not beginning with "-" is found, success is returned
  * and further arguments are not considered. Thus, all options to be considered
@@ -81,8 +84,15 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
 
 int process_args ( int argc, char ** argv, int * advanced_idx )
 {
+        const char * error_prefix = "Inadequate command-line arguments were " \
+                                        "provided";
         enum arg_positions_t apos = ARG_UNKNOWN;
         int i = 1;
+
+        if ( argc < 2 ) {
+                print_error ( error_prefix, ARGSTAT_LACK, &provide_arg_error );
+                return -1;
+        }
 
         for ( ; i < argc; i++ ) {
                 apos = ARG_UNKNOWN;
@@ -94,9 +104,7 @@ int process_args ( int argc, char ** argv, int * advanced_idx )
                 if ( match_arg ( argv [ i ], &apos ) == 0 ) {
                         if ( CHK_ARG ( options, apos ) != 0 ) {
                                 populate_error_buffer ( argv [ i ] );
-                                print_error ( "Inadequate command-line " \
-                                                "arguments were provided.",
-                                                ARGSTAT_DOUBLE,
+                                print_error ( error_prefix, ARGSTAT_DOUBLE,
                                                 &provide_arg_error );
                                 return -1;
                         }
@@ -104,8 +112,7 @@ int process_args ( int argc, char ** argv, int * advanced_idx )
                         SET_ARG ( options, apos );
                 } else {
                         populate_error_buffer ( argv [ i ] );
-                        print_error ( "Inadequate command-line arguments " \
-                                        "were provided.", ARGSTAT_UNKNWN,
+                        print_error ( error_prefix, ARGSTAT_UNKNWN,
                                         &provide_arg_error );
                         return -1;
                 }

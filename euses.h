@@ -14,8 +14,6 @@
 #define PROGRAM_LICENCE_NAME "WTF Public Licence"
 #define PROGRAM_LICENCE_URL  "http://www.wtfpl.net/about/"
 
-#define ERROR_MAX ( 256 )
-
 struct repo_stack_t {
         struct repo_t * lead;
         unsigned long size;
@@ -26,17 +24,12 @@ struct repo_t {
         struct repo_t * next;
 };
 
-void print_error ( const char *, int, const char * ( * get_detail ) ( int ) );
-void populate_error_buffer ( const char * );
-
 struct repo_t * stack_peek ( struct repo_stack_t * );
 struct repo_t * stack_pop ( struct repo_stack_t * );
 void stack_push ( struct repo_stack_t *, struct repo_t * );
 void stack_init ( struct repo_stack_t * );
 void stack_cleanse ( struct repo_stack_t * );
 void stack_print ( struct repo_stack_t * );
-
-extern char error_buffer [ ERROR_MAX ];
 
 #endif /* _EUSES_H */
 
