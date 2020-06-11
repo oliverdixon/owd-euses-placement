@@ -8,7 +8,8 @@
 
 #define PROGRAM_NAME         "ash-euses"
 #define PROGRAM_AUTHOR       "Ashley Dixon"
-#define PROGRAM_YEAR         "2020"
+#define PROGRAM_AUTHOR_EMAIL "ash@suugaku.co.uk"
+#define PROGRAM_YEAR         "MMXX"
 #define PROGRAM_VERSION      "alpha"
 #define PROGRAM_LICENCE_NAME "WTF Public Licence"
 #define PROGRAM_LICENCE_URL  "http://www.wtfpl.net/about/"
@@ -29,6 +30,10 @@ void stack_push ( struct repo_stack_t *, struct repo_t * );
 void stack_init ( struct repo_stack_t * );
 void stack_cleanse ( struct repo_stack_t * );
 void stack_print ( struct repo_stack_t * );
+
+/* see comments in euses.c 
+ * TODO: integrate the argument-processor with the error_buffer system. */
+/* extern char error_buffer [ PATH_MAX ]; */
 
 #endif /* _EUSES_H */
 

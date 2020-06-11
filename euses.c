@@ -24,6 +24,11 @@
 #define PROFILES_SUFFIX    "/profiles/"
 #define DEFAULT_REPO_NAME  "gentoo"
 
+/* Globally accessible message buffer for better error-reporting; it should only
+ * be written to using the populate_error_buffer function, as it provides
+ * overflow-protection and pretty truncation. */
+char error_buffer [ PATH_MAX ];
+
 enum status_t {
         STATUS_OK     =  0, /* everything is OK */
         STATUS_ERRNO  = -1, /* c.f. perror or strerror on errno */
@@ -79,9 +84,8 @@ static const char * provide_error ( enum status_t status )
                 case STATUS_ININME: return "A repository-description does " \
                                         "not contain a [name] clause at the" \
                                         " first opportunity.";
-                case STATUS_INILOC: return "A repository-description file " \
-                                        "does not contain the location " \
-                                        "attribute.";
+                case STATUS_INILOC: return "A description file does not " \
+                                        "contain the location attribute.";
                 case STATUS_INILCS: return "A repository-description file" \
                                         "contains an unwieldy location value.";
                 case STATUS_BADARG: return "Inadequate command-line arguments" \
@@ -91,15 +95,53 @@ static const char * provide_error ( enum status_t status )
         }
 }
 
+/* print_error: format a `status` code, prefixed with `prefix`, and send it to
+ * stderr. This function relies on the global error buffer, `error_buffer`. */
+
+static inline void print_error ( const char * prefix, enum status_t status )
+{
+        fprintf ( stderr, PROGRAM_NAME " caught a fatal error and cannot " \
+                        "continue.\nRe-run with \"--help\" or \"-h\" for help" \
+                        ".\n\n\tSummary: \"%s\"\n\tOffending Article:" \
+                        " \"%s\"\n\tError Detail: \"%s\"\n\tExit Code: %d\n",
+                        prefix, ( error_buffer [ 0 ] != '\0' ) ? error_buffer :
+                        "N/A", provide_error ( status ), EXIT_FAILURE );
+}
+
+/* populate_error_buffer: copy the `message` into the global `error_buffer`,
+ * truncating with " [...]" if necessary. This function assumes that
+ * error_buffer is of the size PATH_MAX. */
+
+static void populate_error_buffer ( const char * message )
+{
+        size_t msg_len = 0;
+        error_buffer [ 0 ] = '\0';
+
+        strncpy ( error_buffer, message, PATH_MAX - 1 );
+
+        if ( ( msg_len = strlen ( message ) ) >= PATH_MAX - 1 ) {
+                /* indicate that the message in the error buffer has been
+                 * truncated */
+                error_buffer [ PATH_MAX - 7 ] = ' ';
+                error_buffer [ PATH_MAX - 6 ] = '[';
+                error_buffer [ PATH_MAX - 5 ] = '.';
+                error_buffer [ PATH_MAX - 4 ] = '.';
+                error_buffer [ PATH_MAX - 3 ] = '.';
+                error_buffer [ PATH_MAX - 2 ] = ']';
+                error_buffer [ PATH_MAX - 1 ] = '\0';
+        }
+}
+
 /* print_version_info: uses the various PROGRAM_* definitions to print
  * program information to stdout. */
 
 static inline void print_version_info ( )
 {
         puts ( "This is " PROGRAM_NAME ", v. " PROGRAM_VERSION " by "
-                        PROGRAM_AUTHOR " (" PROGRAM_YEAR
-                        ").\n\nThis code is licensed under the "
-                        PROGRAM_LICENCE_NAME ",\nthe details of which " \
+                        PROGRAM_AUTHOR " (" PROGRAM_YEAR ").\nFor support, " 
+                        "send e-mail to " PROGRAM_AUTHOR " <"
+                        PROGRAM_AUTHOR_EMAIL ">.\n\nThis code is licensed under"
+                        " the " PROGRAM_LICENCE_NAME ",\nthe details of which "
                         "can be found at " PROGRAM_LICENCE_URL ".\n" );
 }
 
@@ -164,7 +206,8 @@ static enum status_t get_base_dir ( char base [ PATH_MAX ] )
         strcpy ( base, ( base_ptr = getenv ( CONFIGROOT_ENVNAME ) ) != NULL ?
                         base_ptr : CONFIGROOT_DEFAULT );
 
-        if ( strlen ( base ) + strlen ( CONFIGROOT_SUFFIX ) >= PATH_MAX ) {
+        if ( strlen ( base ) + strlen ( CONFIGROOT_SUFFIX ) >= PATH_MAX - 1 ) {
+                populate_error_buffer ( base );
                 errno = ENAMETOOLONG;
                 return STATUS_ERRNO;
         }
@@ -339,8 +382,11 @@ static enum status_t parse_repo_description ( struct repo_t * repo,
                         != STATUS_OK || ( status = 
                                 ini_get_location ( repo->location,
                                         & ( buffer [ offset ] ), "location" ) )
-                        != STATUS_OK )
+                        != STATUS_OK ) {
+                /* All these functions operate on the same desc_path. */
+                populate_error_buffer ( desc_path );
                 return status;
+        }
 
         return STATUS_OK;
 }
@@ -359,10 +405,13 @@ static enum status_t register_repo ( char base [ ], char * filename,
         enum status_t status = STATUS_OK;
         char desc_path [ PATH_MAX ];
 
-        if ( repo == NULL )
+        if ( repo == NULL ) {
+                populate_error_buffer ( filename );
                 return STATUS_ERRNO;
+        }
 
         if ( ( len = strlen ( filename ) + strlen ( base ) ) >= PATH_MAX ) {
+                populate_error_buffer ( filename );
                 free ( repo );
                 errno = ENAMETOOLONG;
                 return STATUS_ERRNO;
@@ -402,8 +451,10 @@ static enum status_t enumerate_repo_descriptions ( char base [ ],
         int gentoo_hit = 0; /* special case: base/gentoo.conf must exist */
         enum status_t status = STATUS_OK;
 
-        if ( ( dp = opendir ( base ) ) == NULL )
+        if ( ( dp = opendir ( base ) ) == NULL ) {
+                populate_error_buffer ( base );
                 return STATUS_ERRNO;
+        }
 
         while ( ( dir = readdir ( dp ) ) != NULL )
                 if ( dir->d_type == DT_REG ) {
@@ -854,6 +905,11 @@ static inline void portdir_complain (  )
  * features. If, for any reason, PORTDIR cannot be taken from one of the two
  * sources, the standard repos.conf/ mechanism is used.
  *
+ * TODO: reading from the environment variable is complete. Now, extracting from
+ * the make.conf must be implemented. I suspect that ini_get_location (possibly
+ * renamed to something more general) can be used, providing "PORTDIR" as the
+ * key substring.
+ *
  * If this function is successful, it dynamically allocates some memory for each
  * of the encountered repositories and pushes them to the `stack`, which can be
  * recursively cleaned/freed with stack_cleanse. If it fails at any stage, the
@@ -904,6 +960,7 @@ int main ( int argc, char ** argv )
         struct repo_stack_t repo_stack;
         enum status_t status = STATUS_OK;
         int arg_idx = 0;
+        error_buffer [ 0 ] = '\0';
 
         if ( argc < 2 || process_args ( argc, argv, &arg_idx ) == -1 ) {
                 fputs ( provide_error ( STATUS_BADARG ), stderr );
@@ -916,22 +973,20 @@ int main ( int argc, char ** argv )
 
         if ( CHK_ARG ( options, ARG_SHOW_HELP ) != 0 ) {
                 print_help_info ( argv [ 0 ] );
-                return EXIT_SUCCESS;
+                return EXIT_SUCCESS; /* show help and quit */
         }
 
         if ( ( status = get_repos ( base, &repo_stack ) ) ) {
-                fputs ( "Could not use the repository-description " \
-                                "base directory:\n\t", stderr );
-                fputs ( provide_error ( status ), stderr );
-                fputc ( '\n', stderr );
+                print_error ( "Could not use the repository-description " \
+                                "base directory.", status );
                 return EXIT_FAILURE;
         }
 
-        /* TODO: split main to allow direct-printing to stderr, possibly with an
-         * optional prefix. */
         if ( argc - arg_idx > 0 && ( status = search_files ( &repo_stack, & (
                                                 argv [ arg_idx ] ), argc -
                                         arg_idx ) ) != STATUS_OK ) {
+                /* TODO: improved error-reporting not yet implemented past
+                 * get_repos or for the argument-processor. */
                 fputs ( "Could not load the USE-description files:\n\t",
                                 stderr );
                 fputs ( provide_error ( status ), stderr );
