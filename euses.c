@@ -627,51 +627,75 @@ static void init_buffer_instance ( struct buffer_info_t * b_inf )
  * avoid getting stuck in an infinite loop (this should be reset by the relevant
  * caller(s) every time a new needle/search term is sought). This function
  * returns the start of the appropriately null-terminated line. If the entry is
- * poorly formatted, NULL is returned.
- *
- * TODO: This function needs more testing for the slightly peculiar cases. */
+ * poorly formatted, NULL is returned. */
 
 static char * find_line_bounds ( char * buffer_start, char * substr_start,
-                char ** marker ) 
+                char ** marker )
 {
         char tmp = '\0', * start = NULL, * end = NULL;
         long key_idx = substr_start - buffer_start;
 
         assert ( key_idx >= 0 );
-        tmp = buffer_start [ key_idx ];
-        buffer_start [ key_idx ] = '\0';
 
-        if ( ( start = strrchr ( buffer_start, '\n' ) ) == NULL
-                        || * ( start++ ) == '\0' ) {
-                /* the entry is not legitimate/poorly formatted */
+        if ( key_idx != 0 ) {
+                tmp = buffer_start [ key_idx ];
+                buffer_start [ key_idx ] = '\0';
+        }
+
+        if ( ( start = strrchr ( buffer_start, '\n' ) ) == NULL ||
+                        *start == '\n' )
+                /* the entry was not preceded with a newline */
+                start = substr_start;
+        else if ( * ( start++ ) == '\0' ) {
+                /* the entry legitimate/poorly formatted */
                 buffer_start [ key_idx ] = tmp;
                 return NULL;
         }
 
-        buffer_start [ key_idx ] = tmp;
+        if ( key_idx != 0 )
+                buffer_start [ key_idx ] = tmp;
 
         end = strchr ( substr_start, '\n' );
-        substr_start [ end - substr_start ] = '\0';
         *marker = end; /* marker is set to NULL if there's no closing newline */
+
+        if ( end != NULL )
+                /* A match appears at the end of one buffer, and continues in
+                 * another, in which case the match can be classified by
+                 * printers as "truncated". This might be a false-positive due
+                 * to the file ending abruptly (no line feed/EOF), but that is
+                 * incredibly rare and only causes a very slight output
+                 * modification. */
+                substr_start [ end - substr_start ] = '\0';
 
         return start;
 }
 
 /* print_search_result: print a search result, `result_str`, from the repo
- * `repo` to stdout, respecting the ARG_PRINT_REPO_PATHS and
- * ARG_PRINT_REPO_NAMES command-line arguments. */
+ * `repo`, to stdout, respecting the ARG_PRINT_REPO_PATHS and
+ * ARG_PRINT_REPO_NAMES command-line arguments. If `truncated` is set (the
+ * result continues in another buffer), the acceptable workaround is to append
+ * "[...]" to the output match, as the important information has already been
+ * written (flags succeed package names). Perhaps this can be changed in the
+ * future. */
 
 static void print_search_result ( const char * result_str,
-                struct repo_t * repo )
+                struct repo_t * repo, int truncated )
 {
         if ( CHK_BIT ( options, ARG_PRINT_REPO_PATHS ) != 0 )
                 /* ARG_PRINT_REPO_PATHS implies ARG_PRINT_REPO_NAMES */
-                printf ( "%s\n\t(::%s => %s)\n", result_str, repo->name,
+                printf ( "%s%s\n\t(::%s => %s)\n", result_str, ( truncated ) ?
+                                " [...]" : "",repo->name,
                                 repo->location );
         else if ( CHK_BIT ( options, ARG_PRINT_REPO_NAMES ) != 0 )
-                printf ( "%s (::%s)\n", result_str, repo->name );
-        else
-                puts ( result_str );
+                printf ( "%s%s (::%s)\n", result_str, ( truncated ) ? " [...]"
+                                : "", repo->name );
+        else {
+                fputs ( result_str, stdout );
+                if ( truncated )
+                        puts ( " [...]" );
+                else
+                        putchar ( '\n' );
+        }
 }
 
 /* search_buffer: search the `buffer` for the provided `needles`, of which there
@@ -706,7 +730,7 @@ static void search_buffer ( char buffer [ BUFFER_SZ ], char ** needles,
                                         == NULL )
                                 break;
 
-                        print_search_result ( ptr, repo );
+                        print_search_result ( ptr, repo, ( buffer == NULL ) );
                         if ( buffer == NULL )
                                 break; /* end of buffer; see `marker` */
 
@@ -716,7 +740,7 @@ static void search_buffer ( char buffer [ BUFFER_SZ ], char ** needles,
         }
 }
 
-/* search_files: search the *.{,local.}desc files in the repo `location`
+/* search_files: search the profiles / *.desc files in the repo `location`
  * directory to find any of the given needles. Once a repository's files have
  * completely been scanned, it is popped from the stack and freed. This function
  * manages the buffering and searching of the files in a recursive (call-stack)
@@ -742,6 +766,7 @@ static enum status_t search_files ( struct repo_stack_t * stack,
         init_buffer_instance ( &bi );
 
         while ( ( repo = stack_pop ( stack ) ) != NULL ) {
+                bi.buffer [ 0 ] = '\0'; /* new buffer on repo change */
                 if ( open_profiles_path ( repo->location, &dp ) == -1 ) {
                         free ( repo );
                         dnull ( &dp );
@@ -750,7 +775,6 @@ static enum status_t search_files ( struct repo_stack_t * stack,
 
                 repo_base_len = strlen ( repo->location );
 
-                /* Is a self-breaking infinite loop the best way to do this ? */
                 for ( ; ; ) {
                         if ( bi.status == BUFSTAT_BORDR
                                         || bi.status == BUFSTAT_MORE ) {
@@ -780,7 +804,8 @@ static enum status_t search_files ( struct repo_stack_t * stack,
                         }
                 }
 
-                if ( bi.status != BUFSTAT_BORDR )
+                if ( bi.status != BUFSTAT_FULL )
+                        /* BUFSTAT_FULL: buffer already searched */
                         search_buffer ( bi.buffer, needles, ncount, repo );
 
                 free ( repo );

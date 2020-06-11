@@ -111,7 +111,7 @@ int process_args ( int argc, char ** argv, int * advanced_idx )
                 }
         }
 
-        *advanced_idx = i - 1;
+        *advanced_idx = i;
         return 0;
 }
 
