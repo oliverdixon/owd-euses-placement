@@ -125,7 +125,12 @@ void populate_error_buffer ( const char * message )
         size_t msg_len = 0;
 
         error_buffer [ 0 ] = '\0'; /* previous call did not result in a fatal */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+        /* If strncpy truncates the NULL-terminator from the source, it is
+         * re-added in the following truncation `if` block. */
         strncpy ( error_buffer, message, ERROR_MAX - 1 );
+#pragma GCC diagnostic pop
 
         if ( ( msg_len = strlen ( message ) ) >= ERROR_MAX - 1 ) {
                 /* indicate that the message in the error buffer has been
