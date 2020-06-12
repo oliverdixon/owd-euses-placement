@@ -9,6 +9,7 @@ moderately simple to drastically improve for the Beta release.
 
 Inexhaustive TODO list for the next major release:
 
+        [ ] Include coloured output and case-insensitive searching;
         [ ] Increase the number of  files  searched  to  include  profiles/desc/
                 *.desc; this will drastically increase the search yield. Perhaps
                 the user could be given slightly more  control  regarding  which

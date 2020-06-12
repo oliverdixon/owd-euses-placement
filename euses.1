@@ -1,7 +1,6 @@
 .TH ASH-EUSES 1 2020-06-11 git.suugaku.co.uk "General Commands Manual"
 .SH NAME
-ash-euses \- a rewrite of
-.BR euses(1) " for modern Gentoo-like systems"
+.BR ash-euses " \- a rewrite of " euses "(1) for modern Gentoo-like systems"
 .SH SYNOPSIS
 .B ash-euses
 .RI "[" "OPTIONS" "]... [" SUBSTRING "]..."
@@ -23,7 +22,7 @@ Gentoo developers.
 .IB BASE /profiles/*.desc
 where
 .IR BASE " is the value from the"
-.BR location " attribute. Currently, it does not recurse into the " base/
+.BR location " attribute. Currently, it does not recurse into the " desc/
 directory, however this is planned for the reasonably immediate future.
 .SH OPTIONS
 .TP
@@ -60,7 +59,75 @@ This behaviour is likely to become the default in the near future, replaced with
 .TP
 .BR "\-\-quiet", " \-q"
 .RI "Suppress the complaint message that arises when " PORTDIR " is detected"
-.RB "on the system. See " NOTES " for more information regarding the issues of"
+.RB "on the system. See " VARIABLES " for more information regarding the "
+issues of using
 .IR PORTDIR " on modern Gentoo-like systems."
+.TP
+.BR \-\-
+.RB "If " \-\- " is passed on the command-line, all further arguments are"
+considered as substrings.
+.SH VARIABLES
+.TP
+.B PORTAGE_CONFIGROOT
+If set in the environment, this variable can be used to modify the directory in
+which the Portage configuration files are stored. For example, for a Gentoo
+.RB "root partition mounted in the " /mnt/gentoo
+.RI "directory, " PORTAGE_CONFIGROOT " can be set to force "
+.BR ash-euses " to search "
+.BR /mnt/gentoo/etc/portage/repos.conf " for repository-configuration files."
+.TP
+.B PORTDIR
+This is a deprecated, albeit widely used, environment variable or
+.BR make.conf " option to specify the base of the " ::gentoo " repository. On "
+.RB "very old systems, this defaults to " /usr/portage ". If"
+.BR ash-euses " detects the usage of "
+.IR PORTDIR " in either of these locations, it issues a warning and ignores the"
+.BR " repos.conf " "directory. For users and administrators desiring multiple "
+repositories/overlays, it is highly recommended that the new
+.BR " repos.conf " "system is preferred. Use the " "\-\-quiet" " command-line"
+option to suppress the
+.IR PORTDIR " warning."
+.SH FILES
+.TP
+.B repos.conf/
+The
+.IB $PORTAGE_CONFIGROOT /repos.conf/
+directory contains the repository-configuration files for Portage, containing a
+human-readable name, and base directory. Files inside this directory usually are
+suffixed with
+.BR .conf ", however this is not required by the Gentoo specification."
+.BR ash-euses " will fail if the file " gentoo.conf " is not found in the"
+directory.
+.TP
+.B make.conf
+.IR $PORTAGE_CONFIGROOT/make.conf " is the primary configuration for Portage, "
+describing various key-value pairs to be used by ebuilds.
+.BR ash-euses " uses this file exclusively for the extraction of the "
+.IR PORTDIR " key."
+.TP
+.B profiles/*.desc
+.IB BASE /profiles/*.desc
+.RB "are the files searched " ash-euses ", in which
+.IR BASE " is the base of the current repository. In the near future, this "
+will be expanded significantly to include all files in the
+.IB BASE /profiles/desc/
+directory.
+.SH EXAMPLES
+.TP
+.B ash-euses -prv qt5
+Prepending the output with version information and a list of repositories,
+search the files for the "qt5" substring. Each entry is appended with the name
+and location of the repository in which the match was found.
+.TP
+.B ash-euses -sn -- --ipsum
+Search the files in all repositories for USE-flag fields ending in the "--ipsum"
+substring, appending the name of the relevant repository to each result.
+.TP
+.B PORTAGE_CONFIGROOT=/mnt/gentoo ash-euses -r
+.RB "Using the " /mnt/gentoo/etc/portage " configuration directory, list all"
+.RB "repositories described in the " repos.conf " directory."
+.SH SEE ALSO
+.BR "euses" "(1), " "emerge" "(1), " "make.conf" "(5), " "portage" "(5), "
+.BR ebuild (1)
 .SH AUTHOR
 .RI "Ashley Dixon <" ash@suugaku.co.uk >
