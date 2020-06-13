@@ -1,7 +1,12 @@
-bin/
 nc/
-a.out
 ebuild/
 .*
+git-ignore-elf
+
+# Binaries
+
+a.out
+bin/
 *.o
+ash-euses
 
