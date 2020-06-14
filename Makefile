@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wpedantic -Wextra
+CFLAGS = -Wall -Wpedantic -Wextra -D_GNU_SOURCE
 PREFIX = /usr/bin
 
 src = $(wildcard *.c)

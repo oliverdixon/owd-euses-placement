@@ -63,6 +63,12 @@ This behaviour is likely to become the default in the near future, replaced with
 issues of using
 .IR PORTDIR " on modern Gentoo-like systems."
 .TP
+.BR "\-\-no\-case", " \-c"
+Perform a case-insensitive search across all the files/buffers. This may have an
+extremely small impact on performance, but utilises various C.P.U.\ extensions
+similar to
+.BR strstr "(3)."
+.TP
 .BR \-\-
 .RB "If " \-\- " is passed on the command-line, all further arguments are"
 considered as substrings.

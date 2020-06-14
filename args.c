@@ -77,7 +77,7 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
 
 static enum argument_status_t match_abbr_arg ( const char * str )
 {
-        static const char * abbr_list = "nphvrsq";
+        static const char * abbr_list = "nphvrsqc";
         const int abbr_sz = strlen ( abbr_list );
         size_t len = strlen ( str );
         int found = 0;

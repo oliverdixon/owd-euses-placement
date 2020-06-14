@@ -791,13 +791,6 @@ static void print_search_result ( const char * result_str,
         }
 }
 
-/* strcasestr: TODO: implement. */
-
-static char * strcasestr ( const char * haystack, const char * needle )
-{
-        return NULL;
-}
-
 /* construct_query: construct an appropriate query, taking `str`, applying the
  * correct filters according to the command-line arguments, and copying an
  * appropriate substring into `query`. The return value of this function should
