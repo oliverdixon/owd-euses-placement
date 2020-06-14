@@ -791,6 +791,40 @@ static void print_search_result ( const char * result_str,
         }
 }
 
+/* strcasestr: TODO: implement. */
+
+static char * strcasestr ( const char * haystack, const char * needle )
+{
+        return NULL;
+}
+
+/* construct_query: construct an appropriate query, taking `str`, applying the
+ * correct filters according to the command-line arguments, and copying an
+ * appropriate substring into `query`. The return value of this function should
+ * never invoke a fatal error; the query should just be skipped. */
+
+static int construct_query ( char query [ QUERY_MAX ], const char * str )
+{
+        int modified = 0;
+        size_t len = 0;
+
+        if ( CHK_ARG ( options, ARG_SEARCH_STRICT ) != 0 ) {
+                if ( ( len = strlen ( str ) + 3 ) >= QUERY_MAX - 1 ) {
+                        /* TODO: move this into the standard error-reporting
+                         * system, reporting as a non-fatal warning. */
+                        fprintf ( stderr, "<%s is too long; skipping>\n", str );
+                        return -1;
+                }
+
+                strcpy ( query, str );
+                strcat ( query, " - " );
+                query [ len - 1 ] = '\0';
+                modified = 1;
+        }
+
+        return ( !modified );
+}
+
 /* search_buffer: search the `buffer` for the provided `needles`, of which there
  * are `ncount`. This function searches and prints the results as soon as they
  * are found, and, providing uninterrupted execution, exits with `buffer`
@@ -800,28 +834,22 @@ static void print_search_result ( const char * result_str,
 static void search_buffer ( char buffer [ BUFFER_SZ ], char ** needles,
                 int ncount, struct repo_t * repo )
 {
+        int bare_query = 1;
         char * ptr = NULL, query [ QUERY_MAX ], * buffer_start = buffer,
-                * substr = NULL;
-        size_t len = 0; 
+                * ( * searcher ) ( const char *, const char * ) =
+                        ( CHK_ARG ( options, ARG_SEARCH_NO_CASE ) != 0 ) ?
+                        &strcasestr : &strstr;
 
         for ( int i = 0; i < ncount; i++ ) {
                 buffer = buffer_start;
 
-                if ( ( len = strlen ( needles [ i ] ) + 3 ) >= QUERY_MAX ) {
-                        fprintf ( stderr, "<%s is too long; skipping>\n",
-                                        needles [ i ] );
+                if ( ( bare_query = construct_query ( query, needles [ i ] ) )
+                                == -1 )
                         continue;
-                }
 
-                if ( CHK_ARG ( options, ARG_SEARCH_STRICT ) != 0 ) {
-                        strcpy ( query, needles [ i ] );
-                        strcat ( query, " - " );
-                        query [ len - 1 ] = '\0';
-                        substr = query;
-                } else
-                        substr = needles [ i ];
-
-                if ( ( ptr = strstr ( buffer, substr ) ) != NULL ) {
+                if ( ( ptr = searcher ( buffer, ( bare_query == 1 )
+                                                ? needles [ i ] : query ) )
+                                != NULL ) {
                         if ( ( ptr = find_line_bounds ( buffer, ptr, &buffer ) )
                                         == NULL )
                                 break;

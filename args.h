@@ -20,17 +20,19 @@
  *  - ARG_LIST_REPOS: list repositories to be searched;
  *  - ARG_SEARCH_STRICT: only search the flag field (identified by suffixing the
  *    query with " - "), and not the entire buffer;
- *  - ARG_NO_COMPLAINING: suppress the PORTDIR warning message. */
+ *  - ARG_NO_COMPLAINING: suppress the PORTDIR warning message;
+ *  - ARG_SEARCH_NO_CASE: perform case-insensitive searching. */
 
 enum arg_positions_t {
-        ARG_UNKNOWN          =  0,
-        ARG_PRINT_REPO_NAMES =  1,
-        ARG_PRINT_REPO_PATHS =  2,
-        ARG_SHOW_HELP        =  4,
-        ARG_SHOW_VERSION     =  8,
-        ARG_LIST_REPOS       = 16,
-        ARG_SEARCH_STRICT    = 32,
-        ARG_NO_COMPLAINING   = 64  /* 7th bit */
+        ARG_UNKNOWN          =   0,
+        ARG_PRINT_REPO_NAMES =   1,
+        ARG_PRINT_REPO_PATHS =   2,
+        ARG_SHOW_HELP        =   4,
+        ARG_SHOW_VERSION     =   8,
+        ARG_LIST_REPOS       =  16,
+        ARG_SEARCH_STRICT    =  32,
+        ARG_NO_COMPLAINING   =  64,
+        ARG_SEARCH_NO_CASE   = 128  /* 8th bit */
 };
 
 extern uint8_t options;
