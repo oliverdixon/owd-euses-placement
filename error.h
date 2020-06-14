@@ -1,4 +1,4 @@
-/* ash-euses: defines the error buffer and various error-reporting functions
+/* ash-euses: defines the information buffer and various reporting functions
  * Ashley Dixon. */
 
 #ifndef _ERROR_H
@@ -6,10 +6,16 @@
 
 #define ERROR_MAX ( 256 )
 
-void print_error ( const char *, int, const char * ( * get_detail ) ( int ) );
-void populate_error_buffer ( const char * );
+enum error_severity_t {
+        ERROR_FATAL = 0,
+        ERROR_WARN  = 1
+};
 
-extern char error_buffer [ ERROR_MAX ];
+void print_info ( const char *, int, const char * ( * get_detail ) ( int ),
+                enum error_severity_t );
+void populate_info_buffer ( const char * );
+
+extern char info_buffer [ ERROR_MAX ];
 
 #endif /* _ERROR_H */
 

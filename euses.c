@@ -26,9 +26,9 @@
 #define DEFAULT_REPO_NAME  "gentoo"
 
 /* Globally accessible message buffer for better error-reporting; it should only
- * be written to using the populate_error_buffer function, as it provides
+ * be written to using the populate_info_buffer function, as it provides
  * overflow-protection and pretty truncation. */
-char error_buffer [ ERROR_MAX ];
+char info_buffer [ ERROR_MAX ];
 
 enum status_t {
         STATUS_ERRNO  =  1, /* c.f. perror or strerror on errno */
@@ -95,53 +95,66 @@ static const char * provide_error ( int status )
         }
 }
 
-/* [exposed function] print_error: format a `status` code, prefixed with
+/* [exposed function] print_info: format a `status` code, prefixed with
  * `prefix`, and send it to stderr. This function relies on the global error
  * buffer, `error_buffer`, and uses the function pointer `get_detail` to
  * retrieve the error detail; this should take a single integer and return a
  * `const char *`.  */
 
-void print_error ( const char * prefix, int status,
-                const char * ( * get_detail ) ( int ) )
+void print_info ( const char * prefix, int status,
+                const char * ( * get_detail ) ( int ),
+                enum error_severity_t level )
 {
+        switch ( level ) {
+                case ERROR_FATAL: goto error_fatal;
+                case ERROR_WARN:  goto error_warn;
+        }
+
+error_fatal:
         fprintf ( stderr, PROGRAM_NAME " caught a fatal error and cannot " \
                         "continue.\nRe-run with \"--help\" or \"-h\" for help" \
                         ".\n\n\tSummary: \"%s\"\n\tOffending Article:" \
                         " \"%s\"\n\tError Detail: \"%s\"\n\tStatus Code: %d%s" \
                         "\n\tProgram Exit Code: %d\n",
                         /* What the fuck is going on ? */
-                        prefix, ( error_buffer [ 0 ] != '\0' ) ? error_buffer :
+                        prefix, ( info_buffer [ 0 ] != '\0' ) ? info_buffer :
                         "N/A", get_detail ( status ), ( status == STATUS_ERRNO )
                         ? errno : status, ( status == STATUS_ERRNO ) ?
                         " (system errno)" : " (internal)", EXIT_FAILURE );
+        return;
+
+error_warn:
+        fprintf ( stderr, PROGRAM_NAME ": warning (\"%s\"): %s\n",
+                        ( info_buffer [ 0 ] != '\0' ) ? info_buffer : "N/A",
+                        prefix );
 }
 
-/* [exposed function] populate_error_buffer: copy the `message` into the global
+/* [exposed function] populate_info_buffer: copy the `message` into the global
  * `error_buffer`, truncating with " [...]" if necessary. This function assumes
  * that error_buffer is of the size ERROR_MAX. */
 
-void populate_error_buffer ( const char * message )
+void populate_info_buffer ( const char * message )
 {
         size_t msg_len = 0;
 
-        error_buffer [ 0 ] = '\0'; /* previous call did not result in a fatal */
+        info_buffer [ 0 ] = '\0'; /* previous call did not result in a fatal */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-truncation"
         /* If strncpy truncates the NULL-terminator from the source, it is
          * re-added in the following truncation `if` block. */
-        strncpy ( error_buffer, message, ERROR_MAX - 1 );
+        strncpy ( info_buffer, message, ERROR_MAX - 1 );
 #pragma GCC diagnostic pop
 
         if ( ( msg_len = strlen ( message ) ) >= ERROR_MAX - 1 ) {
                 /* indicate that the message in the error buffer has been
                  * truncated */
-                error_buffer [ ERROR_MAX - 7 ] = ' ';
-                error_buffer [ ERROR_MAX - 6 ] = '[';
-                error_buffer [ ERROR_MAX - 5 ] = '.';
-                error_buffer [ ERROR_MAX - 4 ] = '.';
-                error_buffer [ ERROR_MAX - 3 ] = '.';
-                error_buffer [ ERROR_MAX - 2 ] = ']';
-                error_buffer [ ERROR_MAX - 1 ] = '\0';
+                info_buffer [ ERROR_MAX - 7 ] = ' ';
+                info_buffer [ ERROR_MAX - 6 ] = '[';
+                info_buffer [ ERROR_MAX - 5 ] = '.';
+                info_buffer [ ERROR_MAX - 4 ] = '.';
+                info_buffer [ ERROR_MAX - 3 ] = '.';
+                info_buffer [ ERROR_MAX - 2 ] = ']';
+                info_buffer [ ERROR_MAX - 1 ] = '\0';
         }
 }
 
@@ -219,7 +232,7 @@ static int construct_path ( char * dest, const char * a, const char * b )
         dest [ 0 ] = '\0';
 
         if ( ( len = strlen ( a ) + strlen ( b ) ) >= PATH_MAX - 1 ) {
-                populate_error_buffer ( b );
+                populate_info_buffer ( b );
                 errno = ENAMETOOLONG;
                 dest [ 0 ] = '\0';
                 return -1;
@@ -413,7 +426,7 @@ static enum status_t parse_repo_description ( struct repo_t * repo,
                                         & ( buffer [ offset ] ), "location" ) )
                         != STATUS_OK ) {
                 /* All these functions operate on the same desc_path. */
-                populate_error_buffer ( desc_path );
+                populate_info_buffer ( desc_path );
                 return status;
         }
 
@@ -434,7 +447,7 @@ static enum status_t register_repo ( char base [ ], char * filename,
         char desc_path [ PATH_MAX ];
 
         if ( repo == NULL ) {
-                populate_error_buffer ( filename );
+                populate_info_buffer ( filename );
                 return STATUS_ERRNO;
         }
 
@@ -474,7 +487,7 @@ static enum status_t enumerate_repo_descriptions ( char base [ ],
         enum status_t status = STATUS_OK;
 
         if ( ( dp = opendir ( base ) ) == NULL ) {
-                populate_error_buffer ( base );
+                populate_info_buffer ( base );
                 return STATUS_ERRNO;
         }
 
@@ -546,7 +559,7 @@ static enum dir_status_t find_next_desc_file ( char repo_base [ PATH_MAX ],
                         if ( errno != 0 ) {
                                 /* On reaching the end of the stream,
                                  * errno has changed to indicate an error. */
-                                populate_error_buffer ( repo_base );
+                                populate_info_buffer ( repo_base );
                                 return DIRSTAT_ERRNO;
                         }
 
@@ -560,7 +573,7 @@ static enum dir_status_t find_next_desc_file ( char repo_base [ PATH_MAX ],
         if ( strlen ( repo_base ) + strlen ( dir->d_name ) >= PATH_MAX - 1 ) {
                 /* Do not use `construct_path` here, as it is a concatenation,
                  * and not a simple construction. */
-                populate_error_buffer ( dir->d_name );
+                populate_info_buffer ( dir->d_name );
                 errno = ENAMETOOLONG;
                 return DIRSTAT_ERRNO;
         }
@@ -581,7 +594,7 @@ static int open_profiles_path ( char path [ PATH_MAX ], DIR ** dp )
         if ( strlen ( PROFILES_SUFFIX ) + strlen ( path ) >= PATH_MAX - 1 ) {
                 /* Do not use `construct_path` here, as it is a concatenation,
                  * and not a simple construction. */
-                populate_error_buffer ( path );
+                populate_info_buffer ( path );
                 errno = ENAMETOOLONG;
                 return -1;
         }
@@ -636,7 +649,7 @@ static enum buffer_status_t populate_buffer ( char * path,
 
         if ( b_inf->fp == NULL && ( b_inf->fp = fopen ( path, "r" ) )
                         == NULL ) {
-                populate_error_buffer ( path );
+                populate_info_buffer ( path );
                 return BUFSTAT_ERRNO; /* the file cannot be opened */
         }
 
@@ -660,7 +673,7 @@ static enum buffer_status_t populate_buffer ( char * path,
 
                 /* the buffer has not been filled because there was an error
                  * with fread, the details of which were written to errno */
-                populate_error_buffer ( path );
+                populate_info_buffer ( path );
                 fnull ( & ( b_inf->fp ) );
                 return BUFSTAT_ERRNO;
         }
@@ -803,9 +816,9 @@ static int construct_query ( char query [ QUERY_MAX ], const char * str )
 
         if ( CHK_ARG ( options, ARG_SEARCH_STRICT ) != 0 ) {
                 if ( ( len = strlen ( str ) + 3 ) >= QUERY_MAX - 1 ) {
-                        /* TODO: move this into the standard error-reporting
-                         * system, reporting as a non-fatal warning. */
-                        fprintf ( stderr, "<%s is too long; skipping>\n", str );
+                        populate_info_buffer ( str );
+                        print_info ( "The query is too long; skipping.",
+                                        STATUS_OK, NULL, ERROR_WARN );
                         return -1;
                 }
 
@@ -885,7 +898,7 @@ static enum status_t search_files ( struct repo_stack_t * stack,
         while ( ( repo = stack_pop ( stack ) ) != NULL ) {
                 bi.buffer [ 0 ] = '\0'; /* new buffer on repo change */
                 if ( open_profiles_path ( repo->location, &dp ) == -1 ) {
-                        populate_error_buffer ( repo->location );
+                        populate_info_buffer ( repo->location );
                         free ( repo );
                         dnull ( &dp );
                         return STATUS_ERRNO;
@@ -1113,10 +1126,10 @@ int main ( int argc, char ** argv )
         enum status_t status = STATUS_OK;
         int arg_idx = 0;
 
-        error_buffer [ 0 ] = '\0';
+        info_buffer [ 0 ] = '\0';
 
         if ( process_args ( argc, argv, &arg_idx ) == -1 )
-                return EXIT_FAILURE; /* process_args invokes print_error */
+                return EXIT_FAILURE; /* process_args invokes print_info */
 
         if ( CHK_ARG ( options, ARG_SHOW_VERSION ) != 0 )
                 print_version_info ( );
@@ -1128,8 +1141,9 @@ int main ( int argc, char ** argv )
 
         /* push the repositories onto the stack */
         if ( ( status = get_repos ( base, &repo_stack ) ) ) {
-                print_error ( "Could not use the repository-description " \
-                                "base directory.", status, &provide_error );
+                print_info ( "Could not use the repository-description " \
+                                "base directory.", status, &provide_error,
+                                ERROR_FATAL );
                 return EXIT_FAILURE;
         }
 
@@ -1137,8 +1151,8 @@ int main ( int argc, char ** argv )
         if ( argc - arg_idx > 0 && ( status = search_files ( &repo_stack, & (
                                                 argv [ arg_idx ] ), argc -
                                         arg_idx ) ) != STATUS_OK ) {
-                print_error ( "Could not load the USE-description files.",
-                                status, &provide_error );
+                print_info ( "Could not load the USE-description files.",
+                                status, &provide_error, ERROR_FATAL );
                 stack_cleanse ( &repo_stack );
                 return EXIT_FAILURE;
         }

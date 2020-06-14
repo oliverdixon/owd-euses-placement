@@ -106,15 +106,16 @@ static enum argument_status_t match_abbr_arg ( const char * str )
         return ARGSTAT_OK;
 }
 
-/* process_args: process the argument list in `argv` and populate the `options`
- * global variable accordingly. This function, due to its notability, produces
- * its own error functions directly to the appropriate output buffer (via
- * print_error), and returns zero to indicate success, and -1 to indicate
- * failure. The caller should probably quit the program with an unsuccessful
- * status code in the event of the latter, as `options` may be incomplete and
- * produce strange results in later execution. On success, `advanced_idx` is set
- * to the index of the next, non-argument option in `argv`. The new `argc` could
- * be calculated by the caller with `argc - advanced_idx`.
+/* [exposed function] process_args: process the argument list in `argv` and
+ * populate the `options` global variable accordingly. This function, due to its
+ * notability, produces its own error functions directly to the appropriate
+ * output buffer (via print_info), and returns zero to indicate success, and -1
+ * to indicate failure. The caller should probably quit the program with an
+ * unsuccessful status code in the event of the latter, as `options` may be
+ * incomplete and produce strange results in later execution. On success,
+ * `advanced_idx` is set to the index of the next, non-argument option in
+ * `argv`. The new `argc` could be calculated by the caller with `argc -
+ * advanced_idx`.
  *
  * If "--", or an argument not beginning with "-" is found, success is returned
  * and further arguments are not considered. Thus, all options to be considered
@@ -129,7 +130,8 @@ int process_args ( int argc, char ** argv, int * advanced_idx )
         int i = 1;
 
         if ( argc < 2 ) {
-                print_error ( error_prefix, ARGSTAT_LACK, &provide_arg_error );
+                print_info ( error_prefix, ARGSTAT_LACK, &provide_arg_error,
+                                ERROR_FATAL );
                 return -1;
         }
 
@@ -142,18 +144,20 @@ int process_args ( int argc, char ** argv, int * advanced_idx )
 
                 if ( argv [ i ] [ 1 ] == '\0' ) {
                         /* check for an empty argument ("-<null>") */
-                        populate_error_buffer ( argv [ i ] );
-                        print_error ( error_prefix, ARGSTAT_EMPTY,
-                                        &provide_arg_error );
+                        populate_info_buffer ( argv [ i ] );
+                        print_info ( error_prefix, ARGSTAT_EMPTY,
+                                        &provide_arg_error,
+                                        ERROR_FATAL);
                         return -1;
                 }
 
                 if ( match_arg ( argv [ i ], &apos ) == 0 ) {
                         /* full or shortened individual arguments */
                         if ( CHK_ARG ( options, apos ) != 0 ) {
-                                populate_error_buffer ( argv [ i ] );
-                                print_error ( error_prefix, ARGSTAT_DOUBLE,
-                                                &provide_arg_error );
+                                populate_info_buffer ( argv [ i ] );
+                                print_info ( error_prefix, ARGSTAT_DOUBLE,
+                                                &provide_arg_error,
+                                                ERROR_FATAL );
                                 return -1;
                         }
 
@@ -162,9 +166,10 @@ int process_args ( int argc, char ** argv, int * advanced_idx )
                         if ( ( argstat = match_abbr_arg ( argv [ i ] ) )
                                         != ARGSTAT_OK ) {
                                 /* combined arguments */
-                                populate_error_buffer ( argv [ i ] );
-                                print_error ( error_prefix, argstat,
-                                                &provide_arg_error );
+                                populate_info_buffer ( argv [ i ] );
+                                print_info ( error_prefix, argstat,
+                                                &provide_arg_error,
+                                                ERROR_FATAL );
                                 return -1;
                         }
                 }
