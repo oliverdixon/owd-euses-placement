@@ -9,7 +9,7 @@ moderately simple to drastically improve for the Beta release.
 
 Inexhaustive TODO list for the next major release:
 
-        [ ] Include coloured output and case-insensitive searching;
+        [ ] Include coloured output;
         [ ] Increase the number of  files  searched  to  include  profiles/desc/
                 *.desc; this will drastically increase the search yield. Perhaps
                 the user could be given slightly more  control  regarding  which
@@ -19,7 +19,11 @@ Inexhaustive TODO list for the next major release:
         [ ] Investigate the alternatives to strstr(3),  preferring  performance.
                 Perhaps the Boyer-Moore  algorithm  could  be  of  assistance  ?
         [ ] Address the many TODOs in the code, e.g.\ eradicate usage of  d_type
-                to boost portability to almost any UNIX-like system.
+                to boost portability to almost any UNIX-like system;
+        [ ] Implement a repository-description cache, reducing start-up time for
+                99% of cases, as ash-euses will no longer have to go trailing
+                around the file-system, searching for and parsing repos.conf/
+                files.
 
 ==========
 
