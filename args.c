@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "error.h"
+#include "report.h"
 #include "args.h"
 
 #define SET_ARG(val, n) ( val |= n )
@@ -47,9 +47,11 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
 {
         static const char * arg_full [ ] = {
                 "--repo-names", "--repo-paths", "--help", "--version",
-                "--list-repos", "--strict", "--quiet", "--no-case", "--portdir"
+                "--list-repos", "--strict", "--quiet", "--no-case", "--portdir",
+                "--cache-disable", "--cache-invalidate"
         }, * arg_abv [ ] = {
-                "-n", "-p", "-h", "-v", "-r", "-s", "-q", "-c", "-d"
+                "-n", "-p", "-h", "-v", "-r", "-s", "-q", "-c", "-d", NULL,
+                NULL
         };
 
         /* `fargc`: full argument count */
@@ -109,7 +111,7 @@ static enum argument_status_t match_abbr_arg ( const char * str )
 /* [exposed function] process_args: process the argument list in `argv` and
  * populate the `options` global variable accordingly. This function, due to its
  * notability, produces its own error functions directly to the appropriate
- * output buffer (via print_info), and returns zero to indicate success, and -1
+ * output buffer (via print_fatal), and returns zero to indicate success, and -1
  * to indicate failure. The caller should probably quit the program with an
  * unsuccessful status code in the event of the latter, as `options` may be
  * incomplete and produce strange results in later execution. On success,
@@ -130,8 +132,7 @@ int process_args ( int argc, char ** argv, int * advanced_idx )
         int i = 1;
 
         if ( argc < 2 ) {
-                print_info ( error_prefix, ARGSTAT_LACK, &provide_arg_error,
-                                ERROR_FATAL );
+                print_fatal ( error_prefix, ARGSTAT_LACK, &provide_arg_error );
                 return -1;
         }
 
@@ -145,9 +146,8 @@ int process_args ( int argc, char ** argv, int * advanced_idx )
                 if ( argv [ i ] [ 1 ] == '\0' ) {
                         /* check for an empty argument ("-<null>") */
                         populate_info_buffer ( argv [ i ] );
-                        print_info ( error_prefix, ARGSTAT_EMPTY,
-                                        &provide_arg_error,
-                                        ERROR_FATAL);
+                        print_fatal ( error_prefix, ARGSTAT_EMPTY,
+                                        &provide_arg_error );
                         return -1;
                 }
 
@@ -155,9 +155,8 @@ int process_args ( int argc, char ** argv, int * advanced_idx )
                         /* full or shortened individual arguments */
                         if ( CHK_ARG ( options, apos ) != 0 ) {
                                 populate_info_buffer ( argv [ i ] );
-                                print_info ( error_prefix, ARGSTAT_DOUBLE,
-                                                &provide_arg_error,
-                                                ERROR_FATAL );
+                                print_fatal ( error_prefix, ARGSTAT_DOUBLE,
+                                                &provide_arg_error );
                                 return -1;
                         }
 
@@ -167,9 +166,8 @@ int process_args ( int argc, char ** argv, int * advanced_idx )
                                         != ARGSTAT_OK ) {
                                 /* combined arguments */
                                 populate_info_buffer ( argv [ i ] );
-                                print_info ( error_prefix, argstat,
-                                                &provide_arg_error,
-                                                ERROR_FATAL );
+                                print_fatal ( error_prefix, argstat,
+                                                &provide_arg_error );
                                 return -1;
                         }
                 }

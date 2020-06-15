@@ -10,9 +10,8 @@
 
 #include "euses.h"
 #include "args.h"
-#include "error.h"
+#include "report.h"
 
-#define BUFFER_SZ ( 4096 )
 #define QUERY_MAX ( 256  )
 
 #define ASCII_MIN ( 0x20 )
@@ -24,22 +23,6 @@
 #define PORTAGE_MAKECONF   "/../make.conf"
 #define PROFILES_SUFFIX    "/profiles/"
 #define DEFAULT_REPO_NAME  "gentoo"
-
-/* Globally accessible message buffer for better error-reporting; it should only
- * be written to using the populate_info_buffer function, as it provides
- * overflow-protection and pretty truncation. */
-char info_buffer [ ERROR_MAX ];
-
-enum status_t {
-        STATUS_ERRNO  =  1, /* c.f. perror or strerror on errno */
-        STATUS_OK     =  0, /* everything is OK */
-        STATUS_NOREPO = -1, /* no repository-description files were found */
-        STATUS_NOGENR = -2, /* no gentoo.conf repository-description file */
-        STATUS_ININME = -3, /* the ini file did not contain "[name]" */
-        STATUS_INILOC = -4, /* the location attribute doesn't exist */
-        STATUS_INILCS = -5, /* the location value exceeded PATH_MAX - 1 */ 
-        STATUS_INIEMP = -6  /* the repository-description file was empty */ 
-};
 
 enum dir_status_t {
         DIRSTAT_DONE  =  1, /* no more files in the stream */
@@ -92,69 +75,6 @@ static const char * provide_error ( int status )
                                         "contains an unwieldy location value.";
 
                 default: return "Unknown error";
-        }
-}
-
-/* [exposed function] print_info: format a `status` code, prefixed with
- * `prefix`, and send it to stderr. This function relies on the global error
- * buffer, `error_buffer`, and uses the function pointer `get_detail` to
- * retrieve the error detail; this should take a single integer and return a
- * `const char *`.  */
-
-void print_info ( const char * prefix, int status,
-                const char * ( * get_detail ) ( int ),
-                enum error_severity_t level )
-{
-        switch ( level ) {
-                case ERROR_FATAL: goto error_fatal;
-                case ERROR_WARN:  goto error_warn;
-        }
-
-error_fatal:
-        fprintf ( stderr, PROGRAM_NAME " caught a fatal error and cannot " \
-                        "continue.\nRe-run with \"--help\" or \"-h\" for help" \
-                        ".\n\n\tSummary: \"%s\"\n\tOffending Article:" \
-                        " \"%s\"\n\tError Detail: \"%s\"\n\tStatus Code: %d%s" \
-                        "\n\tProgram Exit Code: %d\n",
-                        /* What the fuck is going on ? */
-                        prefix, ( info_buffer [ 0 ] != '\0' ) ? info_buffer :
-                        "N/A", get_detail ( status ), ( status == STATUS_ERRNO )
-                        ? errno : status, ( status == STATUS_ERRNO ) ?
-                        " (system errno)" : " (internal)", EXIT_FAILURE );
-        return;
-
-error_warn:
-        fprintf ( stderr, PROGRAM_NAME ": warning (\"%s\"): %s\n",
-                        ( info_buffer [ 0 ] != '\0' ) ? info_buffer : "N/A",
-                        prefix );
-}
-
-/* [exposed function] populate_info_buffer: copy the `message` into the global
- * `error_buffer`, truncating with " [...]" if necessary. This function assumes
- * that error_buffer is of the size ERROR_MAX. */
-
-void populate_info_buffer ( const char * message )
-{
-        size_t msg_len = 0;
-
-        info_buffer [ 0 ] = '\0'; /* previous call did not result in a fatal */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wstringop-truncation"
-        /* If strncpy truncates the NULL-terminator from the source, it is
-         * re-added in the following truncation `if` block. */
-        strncpy ( info_buffer, message, ERROR_MAX - 1 );
-#pragma GCC diagnostic pop
-
-        if ( ( msg_len = strlen ( message ) ) >= ERROR_MAX - 1 ) {
-                /* indicate that the message in the error buffer has been
-                 * truncated */
-                info_buffer [ ERROR_MAX - 7 ] = ' ';
-                info_buffer [ ERROR_MAX - 6 ] = '[';
-                info_buffer [ ERROR_MAX - 5 ] = '.';
-                info_buffer [ ERROR_MAX - 4 ] = '.';
-                info_buffer [ ERROR_MAX - 3 ] = '.';
-                info_buffer [ ERROR_MAX - 2 ] = ']';
-                info_buffer [ ERROR_MAX - 1 ] = '\0';
         }
 }
 
@@ -817,8 +737,7 @@ static int construct_query ( char query [ QUERY_MAX ], const char * str )
         if ( CHK_ARG ( options, ARG_SEARCH_STRICT ) != 0 ) {
                 if ( ( len = strlen ( str ) + 3 ) >= QUERY_MAX - 1 ) {
                         populate_info_buffer ( str );
-                        print_info ( "The query is too long; skipping.",
-                                        STATUS_OK, NULL, ERROR_WARN );
+                        print_warning ( "The query is too long; skipping." );
                         return -1;
                 }
 
@@ -1131,7 +1050,7 @@ int main ( int argc, char ** argv )
         info_buffer [ 0 ] = '\0';
 
         if ( process_args ( argc, argv, &arg_idx ) == -1 )
-                return EXIT_FAILURE; /* process_args invokes print_info */
+                return EXIT_FAILURE; /* process_args invokes print_fatal */
 
         if ( CHK_ARG ( options, ARG_SHOW_VERSION ) != 0 )
                 print_version_info ( );
@@ -1143,9 +1062,8 @@ int main ( int argc, char ** argv )
 
         /* push the repositories onto the stack */
         if ( ( status = get_repos ( base, &repo_stack ) ) ) {
-                print_info ( "Could not use the repository-description " \
-                                "base directory.", status, &provide_error,
-                                ERROR_FATAL );
+                print_fatal ( "Could not use the repository-description " \
+                                "base directory.", status, &provide_error );
                 return EXIT_FAILURE;
         }
 
@@ -1153,8 +1071,8 @@ int main ( int argc, char ** argv )
         if ( argc - arg_idx > 0 && ( status = search_files ( &repo_stack, & (
                                                 argv [ arg_idx ] ), argc -
                                         arg_idx ) ) != STATUS_OK ) {
-                print_info ( "Could not load the USE-description files.",
-                                status, &provide_error, ERROR_FATAL );
+                print_fatal ( "Could not load the USE-description files.",
+                                status, &provide_error );
                 stack_cleanse ( &repo_stack );
                 return EXIT_FAILURE;
         }

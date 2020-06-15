@@ -15,6 +15,8 @@
 #define PROGRAM_LICENCE_NAME "WTF Public Licence"
 #define PROGRAM_LICENCE_URL  "http://www.wtfpl.net/about/"
 
+#define BUFFER_SZ ( 4096 )
+
 struct repo_stack_t {
         struct repo_t * lead;
         unsigned long size;
