@@ -11,6 +11,7 @@
 #include "euses.h"
 #include "args.h"
 #include "report.h"
+#include "cache.h"
 
 #define QUERY_MAX ( 256  )
 
@@ -23,6 +24,24 @@
 #define PORTAGE_MAKECONF   "/../make.conf"
 #define PROFILES_SUFFIX    "/profiles/"
 #define DEFAULT_REPO_NAME  "gentoo"
+
+enum status_t {
+        STATUS_ERRNO  =  1, /* c.f. perror or strerror on errno */
+        STATUS_OK     =  0, /* everything is OK */
+        STATUS_NOREPO = -1, /* no repository-description files were found */
+        STATUS_NOGENR = -2, /* no gentoo.conf repository-description file */
+        STATUS_ININME = -3, /* the ini file did not contain "[name]" */
+        STATUS_INILOC = -4, /* the location attribute doesn't exist */
+        STATUS_INILCS = -5, /* the location value exceeded PATH_MAX - 1 */
+        STATUS_INIEMP = -6  /* the repository-description file was empty */
+};
+
+enum warning_t {
+        WARNING_ERRNO =  1, /* c.f. errno */
+        WARNING_QLONG = -1, /* a query exceeded QUERY_MAX - 1 */
+        WARNING_RNONE = -2, /* no repositories; nothing to do */
+        WARNING_QNONE = -3  /* no queries; nothing to do */
+};
 
 enum dir_status_t {
         DIRSTAT_DONE  =  1, /* no more files in the stream */
@@ -52,13 +71,13 @@ struct buffer_info_t {
         char buffer [ BUFFER_SZ ]; /* buffer, assumed to be of size BUFFER_SZ */
 };
 
-/* provide_error: returns a human-readable string representing an error code, as
- * enumerated in status_t. If the passed code is STATUS_ERRNO, the strerror
- * function is used with the current value of errno. This function takes an
- * integer as opposed to the `status_t` enum so it can be used with similar
- * functions in a function pointer. */
+/* provide_gen_error: returns a human-readable string representing an error
+ * code, as enumerated in status_t. If the passed code is STATUS_ERRNO, the
+ * strerror function is used with the current value of errno. This function
+ * takes an integer as opposed to the `status_t` enum so it can be used with
+ * similar functions in a function pointer. */
 
-static const char * provide_error ( int status )
+static const char * provide_gen_error ( int status )
 {
         switch ( status ) {
                 case STATUS_OK:     return "Everything is OK.";
@@ -74,51 +93,25 @@ static const char * provide_error ( int status )
                 case STATUS_INILCS: return "A repository-description file" \
                                         "contains an unwieldy location value.";
 
-                default: return "Unknown error";
+                default: return "Unknown error.";
         }
 }
 
-/* print_version_info: uses the various PROGRAM_* definitions to print
- * program information to stdout. */
+/* provide_gen_warning: identical to `provide_gen_error`, except this function
+ * deals with non-fatal warnings, returning a human-readable string representing
+ * the warning. The `status` code should be compatible with the `warning_t`
+ * type. */
 
-static inline void print_version_info ( )
+static const char * provide_gen_warning ( int status )
 {
-        puts ( "This is " PROGRAM_NAME ", v. " PROGRAM_VERSION " by "
-                        PROGRAM_AUTHOR " (" PROGRAM_YEAR ").\nFor support, " 
-                        "send e-mail to " PROGRAM_AUTHOR " <"
-                        PROGRAM_AUTHOR_EMAIL ">.\n\nThe source code " \
-                        "repository and tarballs are available on-line " \
-                        "at\n" PROGRAM_URL ". The code is licensed under" \
-                        "\nthe " PROGRAM_LICENCE_NAME ", the details of " \
-                        "which can be found at\n" PROGRAM_LICENCE_URL ".\n" );
-}
+        switch ( status ) {
+                case WARNING_ERRNO: return strerror ( errno );
+                case WARNING_QLONG: return "The query is too long.";
+                case WARNING_RNONE: return "No repositories were found.";
+                case WARNING_QNONE: return "No queries were provided.";
 
-/* print_help_info: pretty-print information regarding the possible command-
- * line arguments, with their abbreviated form and a brief description.
- *
- * Use this format-specifier for adding argument documentation:
- * "--%-13s -%-3s\t%s\n" with "<long name>", "<shortname>", "<description>". */
-
-static inline void print_help_info ( const char * invocation )
-{
-        printf ( PROGRAM_NAME " command-line argument summary.\n" \
-                        "Syntax: %s [options] substrings\n" \
-                        "\n--%-13s -%-3s\t%s\n--%-13s -%-3s\t%s\n" \
-                        "--%-13s -%-3s\t%s\n--%-13s -%-3s\t%s\n" \
-                        "--%-13s -%-3s\t%s\n--%-13s -%-3s\t%s\n" \
-                        "--%-13s -%-3s\t%s\n", invocation,
-                        "list-repos", "r", "Prepend a list of located " \
-                                "repositories (repos.conf/ only).",
-                        "repo-names", "n", "Print repository names for " \
-                                "each match.",
-                        "repo-paths", "p", "Print repository names for " \
-                                "each match (implies repo-names).",
-                        "help", "h", "Print this help information and exit.",
-                        "version", "v", "Prepend version and license " \
-                                "information to the output.",
-                        "strict", "s", "Search only in the flag field, " \
-                                "excluding the description.",
-                        "quiet", "q", "Do not complain about PORTDIR." );
+                default: return "Unknown warning.";
+        }
 }
 
 /* fnull: close and null a non-null file pointer. */
@@ -737,7 +730,7 @@ static int construct_query ( char query [ QUERY_MAX ], const char * str )
         if ( CHK_ARG ( options, ARG_SEARCH_STRICT ) != 0 ) {
                 if ( ( len = strlen ( str ) + 3 ) >= QUERY_MAX - 1 ) {
                         populate_info_buffer ( str );
-                        print_warning ( "The query is too long; skipping." );
+                        print_warning ( WARNING_QLONG, &provide_gen_warning );
                         return -1;
                 }
 
@@ -795,7 +788,7 @@ static void search_buffer ( char buffer [ BUFFER_SZ ], char ** needles,
  * manages the buffering and searching of the files in a recursive (call-stack)
  * manner, and passes errors down the chain to the caller; all errors are
  * reduced to be of the type status_t, allowing for the safe use of
- * provide_error.
+ * provide_gen_error.
  *
  * TODO: this function, along with enumerate_repo_description, relies upon the
  * d_type field of the dirent structure, which is not recognised in strict
@@ -1015,6 +1008,12 @@ static enum status_t get_repos ( char base [ PATH_MAX ],
         char * base_ptr = NULL;
         stack_init ( stack );
 
+        if ( CHK_ARG ( options, ARG_CACHE_DISABLE ) == 0 ) {
+                /* attempt to use the cache */
+                load_cache ( stack );
+                return STATUS_OK;
+        }
+
         /* construct the base path */
         if ( construct_path ( base, ( base_ptr = getenv ( CONFIGROOT_ENVNAME ) )
                                 != NULL ? base_ptr : CONFIGROOT_DEFAULT,
@@ -1060,19 +1059,31 @@ int main ( int argc, char ** argv )
                 return EXIT_SUCCESS; /* show help and quit */
         }
 
+        if ( argc - arg_idx <= 0 ) {
+                populate_info_buffer ( NULL );
+                print_warning ( WARNING_QNONE, &provide_gen_warning );
+                return EXIT_SUCCESS;
+        }
+
         /* push the repositories onto the stack */
         if ( ( status = get_repos ( base, &repo_stack ) ) ) {
                 print_fatal ( "Could not use the repository-description " \
-                                "base directory.", status, &provide_error );
+                                "base directory.", status, &provide_gen_error );
                 return EXIT_FAILURE;
         }
 
+        if ( repo_stack.size == 0 ) {
+                populate_info_buffer ( NULL );
+                print_warning ( WARNING_RNONE, &provide_gen_warning );
+                stack_cleanse ( &repo_stack );
+                return EXIT_SUCCESS;
+        }
+
         /* buffer and search the repository USE-description files */
-        if ( argc - arg_idx > 0 && ( status = search_files ( &repo_stack, & (
-                                                argv [ arg_idx ] ), argc -
-                                        arg_idx ) ) != STATUS_OK ) {
+        if ( ( status = search_files ( &repo_stack, & ( argv [ arg_idx ] ), argc
+                                        - arg_idx ) ) != STATUS_OK ) {
                 print_fatal ( "Could not load the USE-description files.",
-                                status, &provide_error );
+                                status, &provide_gen_error );
                 stack_cleanse ( &repo_stack );
                 return EXIT_FAILURE;
         }

@@ -61,9 +61,8 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
          * shortened counterpart against which to check */
         for ( int i = 0; i < fargc; i++ )
                 if ( strcmp ( arg, arg_full [ i ] ) == 0 ||
-                                ( ( arg_abv [ i ] ) ?
-                                  ( strcmp ( arg, arg_abv [ i ] ) == 0 )
-                                  : 0 ) ) {
+                                ( arg_abv [ i ] != NULL &&
+                                  strcmp ( arg, arg_abv [ i ] ) == 0 ) ) {
                         *apos = 1 << i;
                         break;
                 }

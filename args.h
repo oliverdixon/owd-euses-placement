@@ -38,8 +38,8 @@ enum arg_positions_t {
         ARG_NO_COMPLAINING   =   64,
         ARG_SEARCH_NO_CASE   =  128,
         ARG_ATTEMPT_PORTDIR  =  256,
-        ARG_CACHE_DISABLE    = 1024,
-        ARG_CACHE_INVALIDATE = 2048  /* 11th bit */
+        ARG_CACHE_DISABLE    =  512,
+        ARG_CACHE_INVALIDATE = 1024  /* 11th bit */
 };
 
 typedef uint16_t opts_t;
