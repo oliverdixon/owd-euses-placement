@@ -21,7 +21,9 @@
  *  - ARG_SEARCH_STRICT: only search the flag field (identified by suffixing the
  *    query with " - "), and not the entire buffer;
  *  - ARG_NO_COMPLAINING: suppress the PORTDIR warning message;
- *  - ARG_SEARCH_NO_CASE: perform case-insensitive searching. */
+ *  - ARG_SEARCH_NO_CASE: perform case-insensitive searching;
+ *  - ARG_ATTEMPT_PORTDIR: before attempting to use repos.conf/, try extracting
+ *    PORTDIR from the environment variable string or make.conf. */
 
 enum arg_positions_t {
         ARG_UNKNOWN          =   0,
@@ -32,10 +34,13 @@ enum arg_positions_t {
         ARG_LIST_REPOS       =  16,
         ARG_SEARCH_STRICT    =  32,
         ARG_NO_COMPLAINING   =  64,
-        ARG_SEARCH_NO_CASE   = 128  /* 8th bit */
+        ARG_SEARCH_NO_CASE   = 128,
+        ARG_ATTEMPT_PORTDIR  = 256  /* 9th bit */
 };
 
-extern uint8_t options;
+typedef uint16_t opts_t;
+
+extern opts_t  options;
 int process_args ( int, char **, int * );
 
 #endif /* _ARGS_H */

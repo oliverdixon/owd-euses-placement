@@ -18,7 +18,7 @@ enum argument_status_t {
         ARGSTAT_EMPTY  = -4  /* the provided argument was meaningless/empty */
 };
 
-uint8_t options = 0;
+opts_t options = 0;
 
 /* provide_arg_error: returns a human-readable string representing the provided
  * error code in `status`, as enumerated in `argument_status_t`. */
@@ -47,9 +47,9 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
 {
         static const char * arg_full [ ] = {
                 "--repo-names", "--repo-paths", "--help", "--version",
-                "--list-repos", "--strict", "--quiet", "--no-case"
+                "--list-repos", "--strict", "--quiet", "--no-case", "--portdir"
         }, * arg_abv [ ] = {
-                "-n", "-p", "-h", "-v", "-r", "-s", "-q", "-c"
+                "-n", "-p", "-h", "-v", "-r", "-s", "-q", "-c", "-d"
         };
 
         /* `fargc`: full argument count */
@@ -77,7 +77,7 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
 
 static enum argument_status_t match_abbr_arg ( const char * str )
 {
-        static const char * abbr_list = "nphvrsqc";
+        static const char * abbr_list = "nphvrsqcd";
         const int abbr_sz = strlen ( abbr_list );
         size_t len = strlen ( str );
         int found = 0;

@@ -1103,9 +1103,11 @@ static enum status_t get_repos ( char base [ PATH_MAX ],
                 return STATUS_ERRNO;
 
 
-        /* Try the PORTDIR environment variable followed by make.conf. */
-        if ( portdir_attempt_envvar ( stack ) == 0 ||
-                        portdir_attempt_file ( stack, base ) == 0 ) {
+        /* Try the PORTDIR environment variable followed by make.conf if the
+         * ARG_ATTEMPT_PORTDIR option is set. */
+        if ( CHK_ARG ( options, ARG_ATTEMPT_PORTDIR ) != 0
+                                && ( portdir_attempt_envvar ( stack ) == 0 ||
+                                portdir_attempt_file ( stack, base ) == 0 ) ) {
                 return STATUS_OK; /* successfully pushed to stack */
         }
 
