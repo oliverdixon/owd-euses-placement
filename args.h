@@ -23,9 +23,7 @@
  *  - ARG_NO_COMPLAINING: suppress the PORTDIR warning message;
  *  - ARG_SEARCH_NO_CASE: perform case-insensitive searching;
  *  - ARG_ATTEMPT_PORTDIR: before attempting to use repos.conf/, try extracting
- *    PORTDIR from the environment variable string or make.conf;
- *  - ARG_CACHE_DISABLE: disable the caching for this iteration;
- *  - ARG_CACHE_INVALIDATE: invalidate the cache (and write out). */
+ *    PORTDIR from the environment variable string or make.conf. */
 
 enum arg_positions_t {
         ARG_UNKNOWN          =    0,
@@ -37,12 +35,10 @@ enum arg_positions_t {
         ARG_SEARCH_STRICT    =   32,
         ARG_NO_COMPLAINING   =   64,
         ARG_SEARCH_NO_CASE   =  128,
-        ARG_ATTEMPT_PORTDIR  =  256,
-        ARG_CACHE_DISABLE    =  512,
-        ARG_CACHE_INVALIDATE = 1024  /* 11th bit */
+        ARG_ATTEMPT_PORTDIR  =  256  /* 9th bit */
 };
 
-typedef uint16_t opts_t;
+typedef uint8_t opts_t;
 
 extern opts_t  options;
 int process_args ( int, char **, int * );

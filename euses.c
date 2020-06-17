@@ -11,7 +11,6 @@
 #include "euses.h"
 #include "args.h"
 #include "report.h"
-#include "cache.h"
 
 #define QUERY_MAX ( 256  )
 
@@ -1007,12 +1006,6 @@ static enum status_t get_repos ( char base [ PATH_MAX ],
         enum status_t status = STATUS_OK;
         char * base_ptr = NULL;
         stack_init ( stack );
-
-        if ( CHK_ARG ( options, ARG_CACHE_DISABLE ) == 0 ) {
-                /* attempt to use the cache */
-                load_cache ( stack );
-                return STATUS_OK;
-        }
 
         /* construct the base path */
         if ( construct_path ( base, ( base_ptr = getenv ( CONFIGROOT_ENVNAME ) )

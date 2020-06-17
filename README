@@ -19,11 +19,7 @@ Inexhaustive TODO list for the next major release:
         [ ] Investigate the alternatives to strstr(3),  preferring  performance.
                 Perhaps the Boyer-Moore  algorithm  could  be  of  assistance  ?
         [ ] Address the many TODOs in the code, e.g.\ eradicate usage of  d_type
-                to boost portability to almost any UNIX-like system;
-        [ ] Implement a repository-description cache, reducing start-up time for
-                99% of cases, as ash-euses will no longer have to go trailing
-                around the file-system, searching for and parsing repos.conf/
-                files.
+                to boost portability to almost any UNIX-like system.
 
 ==========
 

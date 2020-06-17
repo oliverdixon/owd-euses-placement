@@ -47,11 +47,9 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
 {
         static const char * arg_full [ ] = {
                 "--repo-names", "--repo-paths", "--help", "--version",
-                "--list-repos", "--strict", "--quiet", "--no-case", "--portdir",
-                "--cache-disable", "--cache-invalidate"
+                "--list-repos", "--strict", "--quiet", "--no-case", "--portdir"
         }, * arg_abv [ ] = {
-                "-n", "-p", "-h", "-v", "-r", "-s", "-q", "-c", "-d", NULL,
-                NULL
+                "-n", "-p", "-h", "-v", "-r", "-s", "-q", "-c", "-d"
         };
 
         /* `fargc`: full argument count */

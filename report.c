@@ -121,8 +121,7 @@ void print_help_info ( const char * invocation )
                         "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
                         "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
                         "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
-                        "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
-                        "--%-13s -%-3c\t%s\n",
+                        "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n",
                         invocation,
 
                         "list-repos", 'r', "Prepend a list of located " \
@@ -140,8 +139,6 @@ void print_help_info ( const char * invocation )
                         "no-case", 'c', "Perform a case-insensitive search "\
                                 "across the files.",
                         "portdir", 'd', "Attempt to use the PORTDIR value.",
-                        "disable-cache", '\b', "Do not access the repository-" \
-                                "description cache file.",
                         "", '\b', "Consider all further arguments as " \
                                 "substrings/queries." );
 }
