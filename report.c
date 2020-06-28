@@ -129,7 +129,7 @@ void print_help_info ( const char * invocation )
                                 "repositories (repos.conf/ only).",
                         "repo-names", 'n', "Print repository names for " \
                                 "each match.",
-                        "repo-paths", 'p', "Print repository names for " \
+                        "repo-paths", 'p', "Print repository details for " \
                                 "each match (implies repo-names).",
                         "help", 'h', "Print this help information and exit.",
                         "version", 'v', "Prepend version and license " \

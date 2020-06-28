@@ -622,7 +622,8 @@ static enum buffer_status_t populate_buffer ( char * path,
  * freeing the passed objects on failure. The caller should confer with errno on
  * the event that DIRSTAT_ERRNO is returned. On success, this function returns
  * DIRSTAT_FULL or DIRSTAT_MORE, dependent on the status of the directory stream
- * (exhausted ?). */
+ * (exhausted ?). On failure, this function will clean up its arguments, freeing
+ * the repository and closing the directory. */
 
 static enum dir_status_t request_new_desc_file ( struct repo_t * repo,
                 DIR ** dp )
@@ -719,19 +720,15 @@ static void print_search_result ( const char * result_str,
 {
         if ( CHK_ARG ( options, ARG_PRINT_REPO_PATHS ) != 0 )
                 /* ARG_PRINT_REPO_PATHS implies ARG_PRINT_REPO_NAMES */
-                printf ( "%s%s\n\t(::%s => %s)\n", result_str, ( truncated ) ?
-                                " [...]" : "",repo->name,
-                                repo->location );
+                printf ( "%s::%s::", repo->location, repo->name ); 
         else if ( CHK_ARG ( options, ARG_PRINT_REPO_NAMES ) != 0 )
-                printf ( "%s%s (::%s)\n", result_str, ( truncated ) ? " [...]"
-                                : "", repo->name );
-        else {
-                fputs ( result_str, stdout );
-                if ( truncated )
-                        puts ( " [...]" );
-                else
-                        putchar ( '\n' );
-        }
+                printf ( "%s::", repo->name );
+
+        fputs ( result_str, stdout );
+        if ( truncated )
+                puts ( " [...]" );
+        else
+                putchar ( '\n' );
 }
 
 /* construct_query: construct an appropriate query, taking `str`, applying the
@@ -810,7 +807,8 @@ static void search_buffer ( char buffer [ LBUF_SZ ], char ** needles,
  * manages the buffering and searching of the files in a recursive (call-stack)
  * manner, and passes errors down the chain to the caller; all errors are
  * reduced to be of the type status_t, allowing for the safe use of
- * provide_gen_error. */
+ * provide_gen_error. All sub-functions populate the global information buffer
+ * when appropriate. */
 
 static enum status_t search_files ( struct repo_stack_t * stack,
                 char ** needles, int ncount )

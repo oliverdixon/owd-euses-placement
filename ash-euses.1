@@ -45,9 +45,8 @@ Append the repository name to every match, in the form of
 is the name taken from the repository-configuration file.
 .TP
 .BR "\-\-repo\-paths", " \-p " "(implies " \-\-repo\-names )
-Append the repository name and file location on a new line to each match, in the
-form
-.BI (:: repo " => " file )
+Prepend the file location and repository to the match, in the form
+.IB file :: name :: match
 .RI "where " file 
 is the path of the description file in which the match was found.
 .TP

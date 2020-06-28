@@ -11,10 +11,10 @@
 /* The following command-line options are currently recognised:
  *
  *  - ARG_PRINT_REPO_NAMES: print the repository in which the match was found,
- *    in the form "::<repo>", e.g. <match> ::gentoo;
+ *    in the form "<repo name>::<match>";
  *  - ARG_PRINT_REPO_PATHS: [implies ARG_PRINT_REPO_NAMES] print the location of
- *    the repository in which the match was found, in the form "::<repo> =>
- *    <path>";
+ *    the repository in which the match was found, in the form "<file>::<repo
+ *    name>::<match>";
  *  - ARG_SHOW_HELP: show help information and exit;
  *  - ARG_SHOW_VERSION: show version information and exit;
  *  - ARG_LIST_REPOS: list repositories to be searched;
