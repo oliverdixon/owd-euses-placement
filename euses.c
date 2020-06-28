@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <dirent.h>
-#include <assert.h>
+#include <glob.h>
 
 #include "euses.h"
 #include "args.h"
@@ -23,8 +23,11 @@
 #define CONFIGROOT_SUFFIX  "/repos.conf/"
 #define CONFIGROOT_DEFAULT "/etc/portage"
 #define PORTAGE_MAKECONF   "/../make.conf"
-#define PROFILES_SUFFIX    "/profiles/"
 #define DEFAULT_REPO_NAME  "gentoo"
+
+/* Globbin' patterns relative to the repository base locations. */
+#define GLOB_PATTERN_ROOT "/profiles/*.desc"
+#define GLOB_PATTERN_DESC "/profiles/desc/*.desc"
 
 enum status_t {
         STATUS_ERRNO  =  1, /* c.f. perror or strerror on errno */
@@ -138,12 +141,17 @@ static inline void dnull ( DIR ** dp )
 /* construct_path: copy `a` to `dest`, and then append `b`. This function
  * returns zero on success, or -1 on failure. In the latter case, errno is set
  * appropriately and the error buffer is populated with `b`. The destination
- * string is null-terminated on success, and truncated to zero on failure. */
+ * string is null-terminated on success, and truncated to zero on failure. If
+ * `a` appears as NULL, `b` is appended to the current contents of `dest`. */
 
 static int construct_path ( char * dest, const char * a, const char * b )
 {
         size_t len = 0;
-        dest [ 0 ] = '\0';
+
+        if ( a == NULL )
+                a = dest;
+        else
+                dest [ 0 ] = '\0';
 
         if ( ( len = strlen ( a ) + strlen ( b ) ) >= PATH_MAX - 1 ) {
                 populate_info_buffer ( b );
@@ -153,9 +161,12 @@ static int construct_path ( char * dest, const char * a, const char * b )
         }
 
         dest [ len - 1 ] = '\0';
-        strcpy ( dest, a );
-        strcat ( dest, b );
 
+        if ( a != dest )
+                /* `a` was (or should have been) NULL */
+                strcpy ( dest, a );
+
+        strcat ( dest, b );
         return 0;
 }
 
@@ -445,84 +456,6 @@ static enum status_t enumerate_repo_descriptions ( char base [ ],
         return STATUS_NOGENR;
 }
 
-/* get_file_ext: returns the file extension---from the final '.' to the
- * null-terminator---of the given string. If the string does not contain '.',
- * or it is immediately followed by a null-terminator, NULL is returned. */
-
-static char * get_file_ext ( const char * filename )
-{
-        char * ext = strrchr ( filename, '.' );
-        return ( ext == NULL || * ( ext++ ) == '\0' ) ? NULL : ext;
-}
-
-/* find_next_desc_file: get the name of the next regular file with the "desc"
- * extension in the repo_base directory. If there is an error reading the
- * directory stream, DIRSTAT_ERRNO is returned, and the caller can refer to
- * `errno`. DIRSTAT_DONE indicates that the current directory stream has been
- * exhausted for regular files, and this function should not be called again
- * until `dp` points to a new directory pointer supplied by open_profiles_path
- * (opendir). If DIRSTAT_MORE is returned, this function can be called again
- * with an externally unmodified value of `dp` to reveal a new regular file in
- * the directory. If the name of the file cannot be concatenated to the
- * repository base path due to length, errno is set appropriately and
- * DIRSTAT_ERRNO is returned. */
-
-static enum dir_status_t find_next_desc_file ( char repo_base [ PATH_MAX ],
-                DIR ** dp )
-{
-        struct dirent * dir = NULL;
-        char * ext = NULL;
-        errno = 0;
-
-        do {
-                if ( ( dir = readdir ( *dp ) ) == NULL ) {
-                        if ( errno != 0 ) {
-                                /* On reaching the end of the stream,
-                                 * errno has changed to indicate an error. */
-                                populate_info_buffer ( repo_base );
-                                return DIRSTAT_ERRNO;
-                        }
-
-                        return DIRSTAT_DONE;
-                }
-
-                ext = get_file_ext ( dir->d_name );
-        } while ( dir->d_type != DT_REG || ( !ext ||
-                                strcmp ( ext, "desc" ) != 0 ) );
-
-        if ( strlen ( repo_base ) + strlen ( dir->d_name ) >= PATH_MAX - 1 ) {
-                /* Do not use `construct_path` here, as it is a concatenation,
-                 * and not a simple construction. */
-                populate_info_buffer ( dir->d_name );
-                errno = ENAMETOOLONG;
-                return DIRSTAT_ERRNO;
-        }
-
-        /* This is safe; the previously appended suffix should end in a oblique
-         * - see open_profiles_path. */
-        strcat ( repo_base, dir->d_name );
-        return DIRSTAT_MORE;
-}
-
-/* open_profiles_path: concatenate the base repository path and profile
- * suffix, and attempt to open the resultant directory. If this function returns
- * zero, the caller must clean-up the opendir call, otherwise, -1 on failure.
- * This only needs to be called once-per-repository. */
-
-static int open_profiles_path ( char path [ PATH_MAX ], DIR ** dp )
-{
-        if ( strlen ( PROFILES_SUFFIX ) + strlen ( path ) >= PATH_MAX - 1 ) {
-                /* Do not use `construct_path` here, as it is a concatenation,
-                 * and not a simple construction. */
-                populate_info_buffer ( path );
-                errno = ENAMETOOLONG;
-                return -1;
-        }
-
-        strcat ( path, PROFILES_SUFFIX );
-        return ( ( *dp = opendir ( path ) ) == NULL ) ? -1 : 0;
-}
-
 /* feof_stream: feof alternative, removing the reliance on file-handling
  * functions, such as fread, to set the end-of-file indicator. Unfortunately,
  * when reading a file of size 4096 into a buffer of identical capacity, fread
@@ -618,28 +551,6 @@ static enum buffer_status_t populate_buffer ( char * path,
         return BUFSTAT_ERRNO;
 }
 
-/* request_new_desc_file: small wrapper function for find_next_desc_file,
- * freeing the passed objects on failure. The caller should confer with errno on
- * the event that DIRSTAT_ERRNO is returned. On success, this function returns
- * DIRSTAT_FULL or DIRSTAT_MORE, dependent on the status of the directory stream
- * (exhausted ?). On failure, this function will clean up its arguments, freeing
- * the repository and closing the directory. */
-
-static enum dir_status_t request_new_desc_file ( struct repo_t * repo,
-                DIR ** dp )
-{
-        enum dir_status_t dirstat = DIRSTAT_MORE;
-
-        if ( ( dirstat = find_next_desc_file ( repo->location, dp ) )
-                        == DIRSTAT_ERRNO ) {
-                free ( repo );
-                dnull ( dp );
-                return DIRSTAT_ERRNO;
-        }
-
-        return dirstat;
-}
-
 /* init_buffer_instance: initialise a buffer_info_t structure with default
  * values, allocating the large file buffer. This function returns -1 on error
  * (errno is set appropriately by malloc), or zero on success. */
@@ -673,8 +584,6 @@ static char * find_line_bounds ( char * buffer_start, char * substr_start,
         char tmp = '\0', * start = NULL, * end = NULL;
         long key_idx = substr_start - buffer_start;
 
-        assert ( key_idx >= 0 );
-
         if ( key_idx != 0 ) {
                 /* This not is the first entry in the buffer. */
                 tmp = buffer_start [ key_idx ];
@@ -705,6 +614,43 @@ static char * find_line_bounds ( char * buffer_start, char * substr_start,
                 substr_start [ end - substr_start ] = '\0';
 
         return start;
+}
+
+/* populate_glob: collate all entries matching repo_base + GLOB_PATTERN_
+ * {ROOT,DESC} in the glob_buf using glob(3). This function returns -1 on
+ * failure---in which case errno and the information buffer are set
+ * appropriately, and zero on success. It is the responsibility of the caller to
+ * use globfree(3) for cleaning up the static allocations of glob. */
+
+static int populate_glob ( char repo_base [ NAME_MAX + 1 ], glob_t * glob_buf )
+{
+        int status = 0;
+        unsigned int base_len = strlen ( repo_base );
+        glob_buf->gl_pathc = 0;
+
+        /* This is an awkward chain of returns, but it must be done as such
+         * (avoid `goto`). */
+        if ( construct_path ( repo_base, NULL, GLOB_PATTERN_ROOT ) == -1 )
+                return -1;
+
+        if ( ( status = glob ( repo_base, 0, NULL, glob_buf ) ) == GLOB_NOSPACE
+                        || status == GLOB_ABORTED ) {
+                populate_info_buffer ( repo_base );
+                return -1;
+        }
+
+        repo_base [ base_len ] = '\0';
+        if ( construct_path ( repo_base, NULL, GLOB_PATTERN_DESC ) == -1 )
+                return -1;
+
+        if ( ( status = glob ( repo_base, GLOB_APPEND, NULL, glob_buf ) )
+                        == GLOB_NOSPACE || status == GLOB_ABORTED ) {
+                populate_info_buffer ( repo_base );
+                return -1;
+        }
+
+        repo_base [ base_len ] = '\0';
+        return 0;
 }
 
 /* print_search_result: print a search result, `result_str`, from the repo
@@ -754,6 +700,9 @@ static int construct_query ( char query [ QUERY_MAX ], const char * str )
                 modified = 1;
         }
 
+        /* If the query has not been modified according to external factors
+         * (such as command-line arguments), the caller must use the original
+         * `str` as the needle. */
         return ( !modified );
 }
 
@@ -801,6 +750,16 @@ static void search_buffer ( char buffer [ LBUF_SZ ], char ** needles,
         }
 }
 
+/* get_next_file: if the glob_buf has a path beyond gl_pathv [ *idx ], this
+ * function returns a pointer to the relevant string, and the given index is
+ * incremented. If no such path exists, NULL is returned. */
+
+static inline char * get_next_file ( glob_t * glob_buf, size_t * idx )
+{
+        return ( *idx >= glob_buf->gl_pathc + 1 ) ? NULL :
+                glob_buf->gl_pathv [ ( *idx )++ ];
+}
+
 /* search_files: search the profiles / *.desc files in the repo `location`
  * directory to find any of the given needles. Once a repository's files have
  * completely been scanned, it is popped from the stack and freed. This function
@@ -814,44 +773,40 @@ static enum status_t search_files ( struct repo_stack_t * stack,
                 char ** needles, int ncount )
 {
         struct repo_t * repo = NULL;
-        enum dir_status_t dirstat = -1;
-        unsigned int repo_base_len = 0;
-        DIR * dp = NULL;
         struct buffer_info_t bi;
+        size_t file_idx = 0;
+        glob_t glob_buf = { .gl_pathc = 0 };
+        char * file_path = NULL;
 
         if ( init_buffer_instance ( &bi ) == -1 )
                 return STATUS_ERRNO;
 
+        /* TODO: split the innards of the while into a separate function,
+         * perhaps something like process_repo() ? */
         while ( ( repo = stack_pop ( stack ) ) != NULL ) {
-                bi.buffer [ 0 ] = '\0'; /* new buffer on repo change */
+                /* discard previous buffer on repo change */
+                bi.buffer [ 0 ] = '\0';
 
-                if ( open_profiles_path ( repo->location, &dp ) == -1 ) {
-                        populate_info_buffer ( repo->location );
-                        free ( repo );
-                        dnull ( &dp );
+                if ( populate_glob ( repo->location, &glob_buf ) == -1 )
                         return STATUS_ERRNO;
-                }
-
-                repo_base_len = strlen ( repo->location );
 
                 for ( ; ; ) {
-                        if ( bi.status == BUFSTAT_BORDR
-                                        || bi.status == BUFSTAT_MORE ) {
-                                repo->location [ repo_base_len ] = '\0';
-                                if ( ( dirstat = request_new_desc_file ( repo,
-                                                                &dp ) )
-                                                == DIRSTAT_ERRNO ) {
-                                        free ( bi.buffer );
-                                        return STATUS_ERRNO;
-                                } else if ( dirstat == DIRSTAT_DONE )
-                                        break; /* no more files in this repo */
+                        /* attempt to get the next file */
+                        if ( ( bi.status == BUFSTAT_BORDR
+                                        || bi.status == BUFSTAT_MORE ) &&
+                                        ( ( file_path = get_next_file (
+                                                               &glob_buf,
+                                                               &file_idx ) )
+                                          == NULL ) ) {
+                                globfree ( &glob_buf );
+                                break; /* exhausted; next repo */
                         }
 
-                        switch ( bi.status = populate_buffer ( repo->location,
+                        switch ( bi.status = populate_buffer ( file_path,
                                                 &bi ) ) {
                                 case BUFSTAT_ERRNO:
                                         free ( repo );
-                                        dnull ( &dp );
+                                        globfree ( &glob_buf );
                                         free ( bi.buffer );
                                         return STATUS_ERRNO;
                                 case BUFSTAT_BORDR:
@@ -869,7 +824,7 @@ static enum status_t search_files ( struct repo_stack_t * stack,
                         search_buffer ( bi.buffer, needles, ncount, repo );
 
                 free ( repo );
-                dnull ( &dp );
+                globfree ( &glob_buf );
         }
 
         free ( bi.buffer );
@@ -1023,6 +978,11 @@ static enum status_t get_repos ( char base [ PATH_MAX ],
         return STATUS_OK;
 }
 
+/* main: entry point for ash-euses. See args.h for a list and description of the 
+ * accepted arguments.
+ *
+ * Syntax: [OPTION]... [SUBSTRING]... */
+
 int main ( int argc, char ** argv )
 {
         char base [ PATH_MAX ];
@@ -1044,7 +1004,7 @@ int main ( int argc, char ** argv )
         }
 
         if ( argc - arg_idx <= 0 ) {
-                populate_info_buffer ( NULL );
+                populate_info_buffer ( NULL ); /* no queries; nothing to do */
                 print_warning ( WARNING_QNONE, &provide_gen_warning );
                 return EXIT_SUCCESS;
         }

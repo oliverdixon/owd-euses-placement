@@ -10,7 +10,7 @@ bin = ash-euses
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 $(bin): $(obj)
-	$(CC) -o $(bin) $^
+	$(CC) -o $(bin) $^ $(CFLAGS)
 
 .PHONY: install
 install: $(bin)
