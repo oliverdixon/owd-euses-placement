@@ -13,6 +13,7 @@
 #include "report.h"
 
 #define QUERY_MAX ( 256  )
+#define BUFFER_SZ ( 4096 )
 #define LBUF_SZ   ( 8192 )
 
 #define ASCII_MIN ( 0x20 )
@@ -389,7 +390,13 @@ static enum status_t register_repo ( char base [ ], char * filename,
  * on the command-line, this function will pretty-print the repository stack and
  * base directory on success.
  *
- * https://wiki.gentoo.org/wiki//etc/portage/repos.conf#Format */
+ * https://wiki.gentoo.org/wiki//etc/portage/repos.conf#Format
+ *
+ * TODO: this function relies upon the d_type field of the dirent structure,
+ * which is not recognised in strict standards-compliance mode (-std=c99). This
+ * isn't particularly a "big deal", as it is very widely supported, however I
+ * would like to eradicate its use if there's an easier way to detect the nature
+ * of results from readdir(3). */
 
 static enum status_t enumerate_repo_descriptions ( char base [ ],
                 struct repo_stack_t * stack )
@@ -803,13 +810,7 @@ static void search_buffer ( char buffer [ LBUF_SZ ], char ** needles,
  * manages the buffering and searching of the files in a recursive (call-stack)
  * manner, and passes errors down the chain to the caller; all errors are
  * reduced to be of the type status_t, allowing for the safe use of
- * provide_gen_error.
- *
- * TODO: this function, along with enumerate_repo_description, relies upon the
- * d_type field of the dirent structure, which is not recognised in strict
- * standards-compliance mode (-std=c99). This isn't particularly a "big deal",
- * as it is very widely supported, however I would like to eradicate its use if
- * there's an easier way to detect the nature of results from readdir(3). */
+ * provide_gen_error. */
 
 static enum status_t search_files ( struct repo_stack_t * stack,
                 char ** needles, int ncount )
@@ -865,10 +866,9 @@ static enum status_t search_files ( struct repo_stack_t * stack,
                         }
                 }
 
-                if ( bi.status != BUFSTAT_FULL ) {
+                if ( bi.status != BUFSTAT_FULL )
                         /* BUFSTAT_FULL: buffer already searched */
                         search_buffer ( bi.buffer, needles, ncount, repo );
-                }
 
                 free ( repo );
                 dnull ( &dp );
@@ -876,32 +876,6 @@ static enum status_t search_files ( struct repo_stack_t * stack,
 
         free ( bi.buffer );
         return STATUS_OK;
-}
-
-/* portdir_complain: providing the absence of the ARG_NO_COMPLAINING flag, this
- * function prints a pre-defined warning regarding the existence of the now-
- * deprecated PORTDIR environment variable/make.conf attribute. If the
- * ARG_LIST_REPOS option is set, a warning is also sent to stderr, announcing
- * that the existence of PORTDIR disables the listing feature. */
-
-static inline void portdir_complain (  )
-{
-        if ( CHK_ARG ( options, ARG_NO_COMPLAINING ) != 0 )
-                return; /* this will be inlined, so it's not _that_ terrible */
-
-        fputs ( "WARNING: " PROGRAM_NAME " has detected the existence of " \
-                        "PORTDIR,\neither as an environment variable, or " \
-                        "existing in a Portage\nconfiguration file. It will be " \
-                        "respected over the repos.conf/\nformat for this " \
-                        "session, however to remove this warning from\neach " \
-                        "run of" PROGRAM_NAME ", please remove all traces " \
-                        "of it from your\nsystem and adopt the new, more " \
-                        "flexible syntax.\n\n", stderr );
-
-        if ( CHK_ARG ( options, ARG_LIST_REPOS ) != 0 )
-                fputs ( "WARNING: Disregarding the repository-listing request" \
-                                " due to the\npresence of PORTDIR.\n\n",
-                                stderr );
 }
 
 /* portdir_makeconf: attempt to extract the value from the "PORTDIR" key-value
@@ -932,12 +906,9 @@ static enum status_t portdir_makeconf ( char base [ PATH_MAX ],
         fclose ( fp );
 
         if ( ( status = get_keyval_value ( value, buffer, "PORTDIR" ) )
-                        != STATUS_OK ) {
-                if ( status == STATUS_INILOC )
-                        return STATUS_OK; /* not found */
-
-                return status;
-        } else
+                        != STATUS_OK )
+                return ( status == STATUS_INILOC ) ? STATUS_OK : status;
+        else
                 /* Extraneous hyphens make no difference when placed as prefixes
                  * and suffixes to a UNIX path. */
                 replace_char ( value, '"', '/' );

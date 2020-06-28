@@ -11,6 +11,7 @@ void print_warning ( int, const char * ( * ) ( int ) );
 void populate_info_buffer ( const char * );
 void print_version_info ( void );
 void print_help_info ( const char * );
+void portdir_complain ( void );
 
 extern char info_buffer [ ERROR_MAX ];
 

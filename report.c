@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include "args.h"
 #include "euses.h"
 #include "report.h"
 
@@ -141,5 +142,32 @@ void print_help_info ( const char * invocation )
                         "portdir", 'd', "Attempt to use the PORTDIR value.",
                         "", '\b', "Consider all further arguments as " \
                                 "substrings/queries." );
+}
+
+/* [exposed function] portdir_complain: providing the absence of the
+ * ARG_NO_COMPLAINING flag, this function prints a pre-defined warning regarding
+ * the existence of the now- deprecated PORTDIR environment variable/make.conf
+ * attribute. If the ARG_LIST_REPOS option is set, a warning is also sent to
+ * stderr, announcing that the existence of PORTDIR disables the listing
+ * feature. */
+
+void portdir_complain (  )
+{
+        if ( CHK_ARG ( options, ARG_NO_COMPLAINING ) != 0 )
+                return; /* this will be inlined, so it's not _that_ terrible */
+
+        fputs ( "WARNING: " PROGRAM_NAME " has detected the existence of " \
+                        "PORTDIR,\neither as an environment variable, or " \
+                        "existing in a Portage\nconfiguration file. It will be " \
+                        "respected over the repos.conf/\nformat for this " \
+                        "session, however to remove this warning from\neach " \
+                        "run of" PROGRAM_NAME ", please remove all traces " \
+                        "of it from your\nsystem and adopt the new, more " \
+                        "flexible syntax.\n\n", stderr );
+
+        if ( CHK_ARG ( options, ARG_LIST_REPOS ) != 0 )
+                fputs ( "WARNING: Disregarding the repository-listing request" \
+                                " due to the\npresence of PORTDIR.\n\n",
+                                stderr );
 }
 
