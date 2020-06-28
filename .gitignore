@@ -1,7 +1,6 @@
 nc/
 ebuild/
 .*
-git-ignore-elf
 
 # Binaries
 

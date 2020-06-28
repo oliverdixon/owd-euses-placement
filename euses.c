@@ -13,6 +13,7 @@
 #include "report.h"
 
 #define QUERY_MAX ( 256  )
+#define LBUF_SZ   ( 8192 )
 
 #define ASCII_MIN ( 0x20 )
 #define ASCII_MAX ( 0x7E )
@@ -67,7 +68,7 @@ struct buffer_info_t {
         FILE * fp; /* the file currently being read */
         size_t idx; /* the index into the current buffer; DO NOT TOUCH */
         enum buffer_status_t status; /* for the caller: status of the reader */
-        char buffer [ BUFFER_SZ ]; /* buffer, assumed to be of size BUFFER_SZ */
+        char * buffer; /* buffer pointer, assumed to be of size LBUF_SZ */
 };
 
 /* provide_gen_error: returns a human-readable string representing an error
@@ -543,7 +544,7 @@ static int feof_stream ( FILE * fp )
 
 /* populate_buffer: assuming the buffer_info_t structure remains persistent and
  * unmodified by the caller, this function loads a file, provided by `path` into
- * the given buffer of BUFFER_SZ. If the buffer is filled, BUFSTAT_FULL or
+ * the given buffer of LBUF_SZ. If the buffer is filled, BUFSTAT_FULL or
  * BUFSTAT_BORDR is returned, dependent upon the position of the file cursor; if
  * the file has filled the buffer perfectly, BUFSTAT_BORDR (borderline case) is
  * returned. If the buffer has not been filled due to a lack of bytes in the
@@ -556,21 +557,22 @@ static enum buffer_status_t populate_buffer ( char * path,
 {
         size_t bw = 0;
 
-        /* ensure the buffer is null-terminated */
-        b_inf->buffer [ BUFFER_SZ - 1 ] = '\0';
-
-        if ( b_inf->fp == NULL && ( b_inf->fp = fopen ( path, "r" ) )
-                        == NULL ) {
+        if ( ( b_inf->fp == NULL && ( b_inf->fp = fopen ( path, "r" ) )
+                                == NULL ) ) {
+                /* the file cannot be opened */
                 populate_info_buffer ( path );
-                return BUFSTAT_ERRNO; /* the file cannot be opened */
+                return BUFSTAT_ERRNO;
         }
+
+        /* ensure the buffer is null-terminated */
+        b_inf->buffer [ LBUF_SZ - 1 ] = '\0';
 
         if ( ( bw = fread ( & ( b_inf->buffer [ b_inf->idx ] ),
                                         sizeof ( char ),
-                                        BUFFER_SZ - 1 - b_inf->idx,
+                                        LBUF_SZ - 1 - b_inf->idx,
                                         b_inf->fp ) )
-                        < BUFFER_SZ - 1 ) {
-                if ( ( b_inf->idx += bw ) == BUFFER_SZ - 1 ) {
+                        < LBUF_SZ - 1 ) {
+                if ( ( b_inf->idx += bw ) == LBUF_SZ - 1 ) {
                         b_inf->idx = 0;
                         return BUFSTAT_FULL;
                 }
@@ -590,7 +592,7 @@ static enum buffer_status_t populate_buffer ( char * path,
                 return BUFSTAT_ERRNO;
         }
 
-        if ( bw == BUFFER_SZ - 1 ) {
+        if ( bw == LBUF_SZ - 1 ) {
                 b_inf->idx = 0;
 
                 if ( feof_stream ( b_inf->fp ) == 1 ) {
@@ -631,13 +633,22 @@ static enum dir_status_t request_new_desc_file ( struct repo_t * repo,
 }
 
 /* init_buffer_instance: initialise a buffer_info_t structure with default
- * values. */
+ * values, allocating the large file buffer. This function returns -1 on error
+ * (errno is set appropriately by malloc), or zero on success. */
 
-static void init_buffer_instance ( struct buffer_info_t * b_inf )
+static int init_buffer_instance ( struct buffer_info_t * b_inf )
 {
         b_inf->fp = NULL;
         b_inf->idx = 0;
         b_inf->status = BUFSTAT_MORE;
+
+        if ( ( b_inf->buffer = malloc ( sizeof ( char ) * LBUF_SZ ) )
+                        == NULL ) {
+                populate_info_buffer ( "Large file buffer" );
+                return -1;
+        }
+
+        return 0;
 }
 
 /* find_line_bounds: find the previous '\n', and the next '\n', and return an
@@ -748,7 +759,7 @@ static int construct_query ( char query [ QUERY_MAX ], const char * str )
  * unchanged. TODO: investigate the advantages of strstr(3) alternative
  * implementations, such as Boyer-Moore. */
 
-static void search_buffer ( char buffer [ BUFFER_SZ ], char ** needles,
+static void search_buffer ( char buffer [ LBUF_SZ ], char ** needles,
                 int ncount, struct repo_t * repo )
 {
         int bare_query = 1;
@@ -764,20 +775,25 @@ static void search_buffer ( char buffer [ BUFFER_SZ ], char ** needles,
                                 == -1 )
                         continue;
 
-                if ( ( ptr = searcher ( buffer, ( bare_query == 1 )
+                do {
+                        if ( ( ptr = searcher ( buffer, ( bare_query == 1 )
                                                 ? needles [ i ] : query ) )
-                                != NULL ) {
-                        if ( ( ptr = find_line_bounds ( buffer, ptr, &buffer ) )
-                                        == NULL )
-                                break;
+                                        != NULL ) {
+                                if ( ( ptr = find_line_bounds ( buffer, ptr,
+                                                                &buffer ) )
+                                                == NULL )
+                                        break;
 
-                        print_search_result ( ptr, repo, ( buffer == NULL ) );
-                        if ( buffer == NULL )
-                                break; /* end of buffer; see `marker` */
+                                print_search_result ( ptr, repo,
+                                                ( buffer == NULL ) );
+                                if ( buffer == NULL )
+                                        break; /* end of buffer; see `marker` */
 
-                        /* undo the terminator added by find_line_bounds */
-                        ptr [ buffer - ptr ] = '\n';
-                }
+                                /* undo the terminator added by
+                                 * find_line_bounds */
+                                ptr [ buffer - ptr ] = '\n';
+                        }
+                } while ( ptr != NULL );
         }
 }
 
@@ -804,10 +820,12 @@ static enum status_t search_files ( struct repo_stack_t * stack,
         DIR * dp = NULL;
         struct buffer_info_t bi;
 
-        init_buffer_instance ( &bi );
+        if ( init_buffer_instance ( &bi ) == -1 )
+                return STATUS_ERRNO;
 
         while ( ( repo = stack_pop ( stack ) ) != NULL ) {
                 bi.buffer [ 0 ] = '\0'; /* new buffer on repo change */
+
                 if ( open_profiles_path ( repo->location, &dp ) == -1 ) {
                         populate_info_buffer ( repo->location );
                         free ( repo );
@@ -823,9 +841,10 @@ static enum status_t search_files ( struct repo_stack_t * stack,
                                 repo->location [ repo_base_len ] = '\0';
                                 if ( ( dirstat = request_new_desc_file ( repo,
                                                                 &dp ) )
-                                                == DIRSTAT_ERRNO )
+                                                == DIRSTAT_ERRNO ) {
+                                        free ( bi.buffer );
                                         return STATUS_ERRNO;
-                                else if ( dirstat == DIRSTAT_DONE )
+                                } else if ( dirstat == DIRSTAT_DONE )
                                         break; /* no more files in this repo */
                         }
 
@@ -834,6 +853,7 @@ static enum status_t search_files ( struct repo_stack_t * stack,
                                 case BUFSTAT_ERRNO:
                                         free ( repo );
                                         dnull ( &dp );
+                                        free ( bi.buffer );
                                         return STATUS_ERRNO;
                                 case BUFSTAT_BORDR:
                                 case BUFSTAT_MORE:
@@ -845,14 +865,16 @@ static enum status_t search_files ( struct repo_stack_t * stack,
                         }
                 }
 
-                if ( bi.status != BUFSTAT_FULL )
+                if ( bi.status != BUFSTAT_FULL ) {
                         /* BUFSTAT_FULL: buffer already searched */
                         search_buffer ( bi.buffer, needles, ncount, repo );
+                }
 
                 free ( repo );
                 dnull ( &dp );
         }
 
+        free ( bi.buffer );
         return STATUS_OK;
 }
 
