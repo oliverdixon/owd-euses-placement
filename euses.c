@@ -756,13 +756,59 @@ static void search_buffer ( char buffer [ LBUF_SZ ], char ** needles,
 
 static inline char * get_next_file ( glob_t * glob_buf, size_t * idx )
 {
-        return ( *idx >= glob_buf->gl_pathc + 1 ) ? NULL :
+        return ( *idx >= glob_buf->gl_pathc ) ? NULL :
                 glob_buf->gl_pathv [ ( *idx )++ ];
+}
+
+/* process_glob_list: given a populated glob_t structure, this function searches
+ * all files specified in `gl_pathv` for each of the `needles`, of which there
+ * should be `ncount`. The `repo` also enabled increased verbosity by the
+ * printing functions, should it have been requested at the command-line. `bi`
+ * is a persistent buffer held by the caller; it is the responsibility of the
+ * caller to free `glob_buf` and `repo`, as they are statically allocated. On
+ * success, this function returns zero, or -1 on failure. In the latter event,
+ * STATUS_ERRNO should be assumed. The information buffer is populated
+ * appropriately. */
+
+static int process_glob_list ( struct buffer_info_t * bi, glob_t * glob_buf,
+                char ** needles, int ncount, struct repo_t * repo )
+{
+        char * file_path = NULL;
+        size_t file_idx = 0;
+
+        for ( ; ; ) {
+                /* attempt to get the next file */
+                if ( ( bi->status == BUFSTAT_BORDR
+                                || bi->status == BUFSTAT_MORE ) &&
+                                ( ( file_path = get_next_file ( glob_buf,
+                                                                &file_idx ) )
+                                  == NULL ) )
+                        break; /* exhausted; next repo */
+
+                switch ( bi->status = populate_buffer ( file_path,
+                                        bi ) ) {
+                        case BUFSTAT_ERRNO:
+                                return -1;
+                        case BUFSTAT_BORDR:
+                        case BUFSTAT_MORE:
+                                break;
+                        case BUFSTAT_FULL:
+                                search_buffer ( bi->buffer, needles,
+                                                ncount, repo );
+                                break;
+                }
+        }
+
+        if ( bi->status != BUFSTAT_FULL )
+                /* BUFSTAT_FULL: buffer already searched */
+                search_buffer ( bi->buffer, needles, ncount, repo );
+
+        return 0;
 }
 
 /* search_files: search the profiles / *.desc files in the repo `location`
  * directory to find any of the given needles. Once a repository's files have
- * completely been scanned, it is popped from the stack and freed. This function
+ * been completely scanned, it is popped from the stack and freed. This function
  * manages the buffering and searching of the files in a recursive (call-stack)
  * manner, and passes errors down the chain to the caller; all errors are
  * reduced to be of the type status_t, allowing for the safe use of
@@ -774,54 +820,23 @@ static enum status_t search_files ( struct repo_stack_t * stack,
 {
         struct repo_t * repo = NULL;
         struct buffer_info_t bi;
-        size_t file_idx = 0;
         glob_t glob_buf = { .gl_pathc = 0 };
-        char * file_path = NULL;
 
         if ( init_buffer_instance ( &bi ) == -1 )
                 return STATUS_ERRNO;
 
-        /* TODO: split the innards of the while into a separate function,
-         * perhaps something like process_repo() ? */
         while ( ( repo = stack_pop ( stack ) ) != NULL ) {
                 /* discard previous buffer on repo change */
                 bi.buffer [ 0 ] = '\0';
 
-                if ( populate_glob ( repo->location, &glob_buf ) == -1 )
+                if ( populate_glob ( repo->location, &glob_buf ) == -1 ||
+                                process_glob_list ( &bi, &glob_buf, needles,
+                                        ncount, repo ) == -1 ) {
+                        free ( bi.buffer );
+                        free ( repo );
+                        globfree ( &glob_buf );
                         return STATUS_ERRNO;
-
-                for ( ; ; ) {
-                        /* attempt to get the next file */
-                        if ( ( bi.status == BUFSTAT_BORDR
-                                        || bi.status == BUFSTAT_MORE ) &&
-                                        ( ( file_path = get_next_file (
-                                                               &glob_buf,
-                                                               &file_idx ) )
-                                          == NULL ) ) {
-                                globfree ( &glob_buf );
-                                break; /* exhausted; next repo */
-                        }
-
-                        switch ( bi.status = populate_buffer ( file_path,
-                                                &bi ) ) {
-                                case BUFSTAT_ERRNO:
-                                        free ( repo );
-                                        globfree ( &glob_buf );
-                                        free ( bi.buffer );
-                                        return STATUS_ERRNO;
-                                case BUFSTAT_BORDR:
-                                case BUFSTAT_MORE:
-                                        break;
-                                case BUFSTAT_FULL:
-                                        search_buffer ( bi.buffer, needles,
-                                                        ncount, repo );
-                                        break;
-                        }
                 }
-
-                if ( bi.status != BUFSTAT_FULL )
-                        /* BUFSTAT_FULL: buffer already searched */
-                        search_buffer ( bi.buffer, needles, ncount, repo );
 
                 free ( repo );
                 globfree ( &glob_buf );
