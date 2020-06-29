@@ -1,4 +1,4 @@
-/* ash-euses: direct reporting functions, c.f.\ report.h
+/* ash-euses: direct reporting functions, c.f.\ converse.h
  * Ashley Dixon. */
 
 #include <stdio.h>
@@ -8,7 +8,7 @@
 
 #include "args.h"
 #include "euses.h"
-#include "report.h"
+#include "converse.h"
 
 /* Globally accessible message buffer for better error-reporting; it should only
  * be written to using the populate_info_buffer function, as it provides
@@ -112,7 +112,7 @@ void print_version_info ( )
  * description.
  *
  * Use this format-specifier for adding argument documentation:
- * "--%-13s -%-3s\t%s\n" with "<long name>", "<shortname>", "<description>". */
+ * "--%-13s -%-3c\t%s\n" with "<long name>", "<shortname>", "<description>". */
 
 void print_help_info ( const char * invocation )
 {
@@ -122,8 +122,8 @@ void print_help_info ( const char * invocation )
                         "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
                         "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
                         "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
-                        "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n",
-                        invocation,
+                        "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
+                        "--%-13s -%-3c\t%s\n", invocation,
 
                         "list-repos", 'r', "Prepend a list of located " \
                                 "repositories (repos.conf/ only).",
@@ -140,6 +140,8 @@ void print_help_info ( const char * invocation )
                         "no-case", 'c', "Perform a case-insensitive search "\
                                 "across the files.",
                         "portdir", 'd', "Attempt to use the PORTDIR value.",
+                        "print-needles", 'e', "Prepend each match with the " \
+                                "relevant needle substring.",
                         "", '\b', "Consider all further arguments as " \
                                 "substrings/queries." );
 }

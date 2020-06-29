@@ -23,7 +23,8 @@
  *  - ARG_NO_COMPLAINING: suppress the PORTDIR warning message;
  *  - ARG_SEARCH_NO_CASE: perform case-insensitive searching;
  *  - ARG_ATTEMPT_PORTDIR: before attempting to use repos.conf/, try extracting
- *    PORTDIR from the environment variable string or make.conf. */
+ *    PORTDIR from the environment variable string or make.conf;
+ *  - ARG_PRINT_NEEDLE: prepend the relevant search needle to every match. */
 
 enum arg_positions_t {
         ARG_UNKNOWN          =   0,
@@ -35,7 +36,8 @@ enum arg_positions_t {
         ARG_SEARCH_STRICT    =  32,
         ARG_NO_COMPLAINING   =  64,
         ARG_SEARCH_NO_CASE   = 128,
-        ARG_ATTEMPT_PORTDIR  = 256  /* 9th bit */
+        ARG_ATTEMPT_PORTDIR  = 256,
+        ARG_PRINT_NEEDLE     = 512  /* 10th bit */
 };
 
 typedef uint8_t opts_t;

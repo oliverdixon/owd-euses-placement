@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "report.h"
+#include "converse.h"
 #include "args.h"
 
 #define SET_ARG(val, n) ( val |= n )
@@ -47,9 +47,10 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
 {
         static const char * arg_full [ ] = {
                 "--repo-names", "--repo-paths", "--help", "--version",
-                "--list-repos", "--strict", "--quiet", "--no-case", "--portdir"
+                "--list-repos", "--strict", "--quiet", "--no-case", "--portdir",
+                "--print-needles"
         }, * arg_abv [ ] = {
-                "-n", "-p", "-h", "-v", "-r", "-s", "-q", "-c", "-d"
+                "-n", "-p", "-h", "-v", "-r", "-s", "-q", "-c", "-d", "-e"
         };
 
         /* `fargc`: full argument count */
@@ -76,7 +77,7 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
 
 static enum argument_status_t match_abbr_arg ( const char * str )
 {
-        static const char * abbr_list = "nphvrsqcd";
+        static const char * abbr_list = "nphvrsqcde";
         const int abbr_sz = strlen ( abbr_list );
         size_t len = strlen ( str );
         int found = 0;
