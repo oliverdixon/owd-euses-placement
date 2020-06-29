@@ -48,6 +48,7 @@ enum status_t {
 
 enum warning_t {
         WARNING_ERRNO =  1, /* c.f. errno */
+        WARNING_OK    =  0, /* everything is OK */
         WARNING_QLONG = -1, /* a query exceeded QUERY_MAX - 1 */
         WARNING_RNONE = -2, /* no repositories; nothing to do */
         WARNING_QNONE = -3, /* no queries; nothing to do */
@@ -673,6 +674,37 @@ static int populate_glob ( char repo_base [ NAME_MAX + 1 ], glob_t * glob_buf )
         return 0;
 }
 
+/* process_seamless_buffer: validate/parse and print from the start of the
+ * seamless buffer to the first newline. If any of the sub-functions fail, the
+ * appropriate warning is returned; WARNING_OK being returned on success. */
+
+static enum warning_t process_seamless_buffer ( struct buffer_info_t * bi,
+                char buffer [ SBUF_SZ ], long * pos )
+{
+        char * newline_pos = strchr ( buffer, '\n' );
+        unsigned int newline_diff = 0;
+
+        *pos += ( newline_diff = newline_pos - buffer );
+
+        if ( newline_pos == NULL ) {
+                /* No newline found; The warning for a failed fseek takes
+                 * precedence over the absence of a newline. */
+                return ( fseek ( bi->fp, *pos, SEEK_SET ) == -1 ) ?
+                        WARNING_ERRNO : WARNING_NONWL;
+        }
+
+        if ( errno != 0 || fseek ( bi->fp, *pos, SEEK_SET ) == -1 )
+                /* an error occurred with the buffer-collation or the
+                 * position-reversal (fseek to `pos`). */
+                return WARNING_ERRNO;
+
+        buffer [ newline_diff ] = '\0';
+        fputs ( buffer, stdout );
+        buffer [ newline_diff ] = '\n';
+
+        return WARNING_OK;
+}
+
 /* print_seamless_buffer: give the illusion of a seamless buffer, by allocating
  * a relatively small buffer (SBUF_SZ) to accommodate from the current position
  * to the end of the line, should that line appear in a subsequent buffer. This
@@ -680,14 +712,13 @@ static int populate_glob ( char repo_base [ NAME_MAX + 1 ], glob_t * glob_buf )
  * to avoid double-searching. If, for any reason, the next line cannot be read
  * and parsed, " [...]" is printed.
  *
- * This function returns -1 if a warning has been issued, and zero if not.
- * TODO: split this function, perhaps into `process_seamless_buffer` .*/
+ * This function returns -1 if a warning has been issued, and zero if not. */
 
 static int print_seamless_buffer ( struct buffer_info_t * bi )
 {
-        char buffer [ SBUF_SZ ], * newline_pos = NULL;
+        char buffer [ SBUF_SZ ];
+        enum warning_t warn_status = WARNING_OK;
         long pos = 0;
-        unsigned int newline_diff = 0;
 
         errno = 0;
 
@@ -708,43 +739,18 @@ static int print_seamless_buffer ( struct buffer_info_t * bi )
         }
 
         /* Failure of this function is trivial; print " [...]" as a fallback. */
-
         fread ( buffer, sizeof ( char ), SBUF_SZ - 1, bi->fp );
-        newline_pos = strchr ( buffer, '\n' );
-        pos += ( newline_diff = newline_pos - buffer );
 
-        if ( newline_pos == NULL ) {
-                /* no newline found */
+        if ( ( warn_status = process_seamless_buffer ( bi, buffer, &pos ) )
+                        != WARNING_OK ) {
                 fputs ( " [...]\n", stdout );
                 if ( CHK_ARG ( options, ARG_NO_MIDBUF_WARN ) == 0 ) {
                         populate_info_buffer ( bi->path );
-
-                        if ( fseek ( bi->fp, pos, SEEK_SET ) == -1 )
-                                /* Warning for a failed fseek takes precedence
-                                 * over the absence of a newline. */
-                                print_warning ( WARNING_ERRNO,
-                                                &provide_gen_warning );
-                        else
-                                print_warning ( WARNING_NONWL,
-                                                &provide_gen_warning );
+                        print_warning ( warn_status, &provide_gen_warning );
                 }
 
                 return -1;
         }
-
-        if ( errno != 0 || fseek ( bi->fp, pos, SEEK_SET ) == -1 ) {
-                fputs ( " [...]\n", stdout );
-                if ( CHK_ARG ( options, ARG_NO_MIDBUF_WARN ) == 0 ) {
-                        populate_info_buffer ( bi->path );
-                        print_warning ( WARNING_ERRNO, &provide_gen_warning );
-                }
-
-                return -1;
-        }
-
-        buffer [ newline_diff ] = '\0';
-        fputs ( buffer, stdout );
-        buffer [ newline_diff ] = '\n';
 
         return 0;
 }
