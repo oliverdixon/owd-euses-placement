@@ -688,15 +688,19 @@ static int construct_query ( char query [ QUERY_MAX ], const char * str )
         size_t len = 0;
 
         if ( CHK_ARG ( options, ARG_SEARCH_STRICT ) != 0 ) {
-                if ( ( len = strlen ( str ) + 3 ) >= QUERY_MAX - 1 ) {
+                /* strlen ( str ) + 3 >= QUERY_MAX - 1
+                 * ==> strlen ( str ) >= QUERY_MAX - 4 */
+                if ( ( len = strlen ( str ) ) >= QUERY_MAX - 4 ) {
                         populate_info_buffer ( str );
                         print_warning ( WARNING_QLONG, &provide_gen_warning );
                         return -1;
                 }
 
                 strcpy ( query, str );
-                strcat ( query, " - " );
-                query [ len - 1 ] = '\0';
+                query [ len ] = ' ';
+                query [ len + 1 ] = '-';
+                query [ len + 2 ] = ' ';
+                query [ len + 3 ] = '\0';
                 modified = 1;
         }
 
@@ -762,7 +766,7 @@ static inline char * get_next_file ( glob_t * glob_buf, size_t * idx )
 
 /* process_glob_list: given a populated glob_t structure, this function searches
  * all files specified in `gl_pathv` for each of the `needles`, of which there
- * should be `ncount`. The `repo` also enabled increased verbosity by the
+ * should be `ncount`. The `repo` also enables increased verbosity by the
  * printing functions, should it have been requested at the command-line. `bi`
  * is a persistent buffer held by the caller; it is the responsibility of the
  * caller to free `glob_buf` and `repo`, as they are statically allocated. On
