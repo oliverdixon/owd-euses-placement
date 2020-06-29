@@ -408,11 +408,13 @@ static enum status_t register_repo ( char base [ ], char * filename,
  *
  * https://wiki.gentoo.org/wiki//etc/portage/repos.conf#Format
  *
- * TODO: this function relies upon the d_type field of the dirent structure,
+ * NOTE: this function relies upon the d_type field of the dirent structure,
  * which is not recognised in strict standards-compliance mode (-std=c99). This
  * isn't particularly a "big deal", as it is very widely supported, however I
  * would like to eradicate its use if there's an easier way to detect the nature
- * of results from readdir(3). */
+ * of results from readdir(3). The POSIX S_ISDIR macro (inode(7): regular
+ * file=0100000 S_IFREG) seemed plausible, but it requires an additional stat(2)
+ * call on each file, which is not an acceptable performance hit. */
 
 static enum status_t enumerate_repo_descriptions ( char base [ ],
                 struct repo_stack_t * stack )
@@ -1014,6 +1016,35 @@ static enum status_t get_repos ( char base [ PATH_MAX ],
         return STATUS_OK;
 }
 
+/* prelim_checks: perform some preliminary checks, primarily revolving around
+ * the argument-processing stage. This function returns zero on success, -1 on
+ * hard-failure, and 1 on soft-failure (the program should probably terminate,
+ * but not return a failing status code). `argc` and `argv` should be the raw
+ * values provided by the environment, and `arg_idx` is the index, in `argv`, of
+ * the first non-argument entry. */
+
+static int prelim_checks ( int argc, char ** argv, int * arg_idx )
+{
+        if ( process_args ( argc, argv, arg_idx ) == -1 )
+                return -1; /* process_args invokes print_fatal */
+
+        if ( CHK_ARG ( options, ARG_SHOW_VERSION ) != 0 )
+                print_version_info ( );
+
+        if ( CHK_ARG ( options, ARG_SHOW_HELP ) != 0 ) {
+                print_help_info ( argv [ 0 ] );
+                return 1; /* show help and quit */
+        }
+
+        if ( argc - *arg_idx <= 0 ) {
+                populate_info_buffer ( NULL ); /* no queries; nothing to do */
+                print_warning ( WARNING_QNONE, &provide_gen_warning );
+                return 1;
+        }
+
+        return 0;
+}
+
 /* main: entry point for ash-euses. See args.h for a list and description of the 
  * accepted arguments.
  *
@@ -1024,29 +1055,17 @@ int main ( int argc, char ** argv )
         char base [ PATH_MAX ];
         struct repo_stack_t repo_stack;
         enum status_t status = STATUS_OK;
-        int arg_idx = 0;
+        int arg_idx = 0, prelim_status = 0;
 
         info_buffer [ 0 ] = '\0';
 
-        if ( process_args ( argc, argv, &arg_idx ) == -1 )
-                return EXIT_FAILURE; /* process_args invokes print_fatal */
-
-        if ( CHK_ARG ( options, ARG_SHOW_VERSION ) != 0 )
-                print_version_info ( );
-
-        if ( CHK_ARG ( options, ARG_SHOW_HELP ) != 0 ) {
-                print_help_info ( argv [ 0 ] );
-                return EXIT_SUCCESS; /* show help and quit */
-        }
-
-        if ( argc - arg_idx <= 0 ) {
-                populate_info_buffer ( NULL ); /* no queries; nothing to do */
-                print_warning ( WARNING_QNONE, &provide_gen_warning );
+        if ( ( prelim_status = prelim_checks ( argc, argv, &arg_idx ) ) == -1 )
+                return EXIT_FAILURE;
+        else if ( status == 1 )
                 return EXIT_SUCCESS;
-        }
 
         /* push the repositories onto the stack */
-        if ( ( status = get_repos ( base, &repo_stack ) ) ) {
+        if ( ( status = get_repos ( base, &repo_stack ) ) != STATUS_OK ) {
                 print_fatal ( "Could not use the repository-description " \
                                 "base directory.", status, &provide_gen_error );
                 return EXIT_FAILURE;
