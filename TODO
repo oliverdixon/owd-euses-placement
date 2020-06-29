@@ -3,8 +3,6 @@ The always-changing TODO list for ash-euses.
 
 Include coloured output (?);
 
-Avoid obvious buffer-truncation: "[...]";
-
 Investigate the alternatives to strstr(3), preferring performance. Perhaps the
 Boyer-Moore algorithm could be of assistance; some other major file-searchers
 have implemented it over glibc's strstr (ag-silversearcher) ?

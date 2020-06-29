@@ -20,6 +20,7 @@
 #define QUERY_MAX ( 256  )
 #define BUFFER_SZ ( 4096 )
 #define LBUF_SZ   ( 8192 )
+#define SBUF_SZ   ( 256  )
 
 #define ASCII_MIN ( 0x20 )
 #define ASCII_MAX ( 0x7E )
@@ -78,6 +79,7 @@ struct buffer_info_t {
         size_t idx; /* the index into the current buffer; DO NOT TOUCH */
         enum buffer_status_t status; /* for the caller: status of the reader */
         char * buffer; /* buffer pointer, assumed to be of size LBUF_SZ */
+        char * path; /* path of `fp` */
 };
 
 /* provide_gen_error: returns a human-readable string representing an error
@@ -306,32 +308,32 @@ static enum status_t buffer_repo_description ( char path [ ],
 
         if ( fseek ( fp, 0, SEEK_END ) == -1 ||
                         ( f_len = ftell ( fp ) ) == -1 ) {
-                fclose ( fp );
+                fnull ( &fp );
                 return STATUS_ERRNO;
         }
 
         rewind ( fp );
         if ( f_len >= BUFFER_SZ ) {
                 /* the repository-description file would not fit the buffer */
-                fclose ( fp );
+                fnull ( &fp );
                 errno = EFBIG;
                 return STATUS_ERRNO;
         }
 
         if ( f_len == 0 ) {
                 /* the file is empty, and the INI-parser would fail */
-                fclose ( fp );
+                fnull ( &fp );
                 return STATUS_INIEMP;
         }
 
         if ( ( bytes_read = fread ( buffer, sizeof ( char ), BUFFER_SZ - 1,
                                         fp ) ) < BUFFER_SZ - 1
                         && !feof ( fp ) ) {
-                fclose ( fp );
+                fnull ( &fp );
                 return STATUS_ERRNO;
         }
 
-        fclose ( fp );
+        fnull ( &fp );
         buffer [ bytes_read ] = '\0';
         return STATUS_OK;
 }
@@ -484,9 +486,9 @@ static int feof_stream ( FILE * fp )
         return ( pos == len );
 }
 
-/* organise_buffer: given a populated buffer `b_inf->buffer`, this function
+/* organise_buffer: given a populated buffer `bi->buffer`, this function
  * determines the nature of the buffer in relation to the status of the file
- * pointer, `b_inf->fp`. If the buffer is full, and there is more to be read
+ * pointer, `bi->fp`. If the buffer is full, and there is more to be read
  * from the file, BUFSTAT_FULL is returned. If the buffer is full, and the file
  * has ended, BUFSTAT_BORDR (the borderline case) is returned, whereas
  * BUFSTAT_MORE is returned if the file has been exhausted and there is more
@@ -497,34 +499,34 @@ static int feof_stream ( FILE * fp )
  * pointer should (a) the file have ended, or (b) an error occurs. */
 
 static enum buffer_status_t determine_buffer_nature ( size_t bw,
-                struct buffer_info_t * b_inf, char * path )
+                struct buffer_info_t * bi, char * path )
 {
         if ( bw < LBUF_SZ - 1 ) {
-                if ( ( b_inf->idx += bw ) == LBUF_SZ - 1 ) {
-                        b_inf->idx = 0;
+                if ( ( bi->idx += bw ) == LBUF_SZ - 1 ) {
+                        bi->idx = 0;
                         return BUFSTAT_FULL;
                 }
 
-                b_inf->buffer [ b_inf->idx ] = '\0';
-                if ( feof_stream ( b_inf->fp ) == 1 ) {
+                bi->buffer [ bi->idx ] = '\0';
+                if ( feof_stream ( bi->fp ) == 1 ) {
                         /* the buffer has not been filled because the file has
                          * no more bytes */
-                        fnull ( & ( b_inf->fp ) );
+                        fnull ( & ( bi->fp ) );
                         return BUFSTAT_MORE;
                 }
 
                 /* the buffer has not been filled because there was an error
                  * with fread, the details of which were written to errno */
                 populate_info_buffer ( path );
-                fnull ( & ( b_inf->fp ) );
+                fnull ( & ( bi->fp ) );
                 return BUFSTAT_ERRNO;
         } else {
-                b_inf->idx = 0;
+                bi->idx = 0;
 
-                if ( feof_stream ( b_inf->fp ) == 1 ) {
+                if ( feof_stream ( bi->fp ) == 1 ) {
                         /* borderline case: the buffer has been filled, and the
                          * file has ended */
-                        fnull ( & ( b_inf->fp ) );
+                        fnull ( & ( bi->fp ) );
                         return BUFSTAT_BORDR;
                 }
 
@@ -544,41 +546,41 @@ static enum buffer_status_t determine_buffer_nature ( size_t bw,
  * contain a new path. If the file cannot be opened or read, BUFSTAT_ERRNO is
  * returned, and the caller must confer with errno. */
 
-static enum buffer_status_t populate_buffer ( char * path,
-                struct buffer_info_t * b_inf )
+static enum buffer_status_t populate_buffer ( struct buffer_info_t * bi )
 {
         size_t bw = 0;
 
-        if ( ( b_inf->fp == NULL && ( b_inf->fp = fopen ( path, "r" ) )
+        if ( ( bi->fp == NULL && ( bi->fp = fopen ( bi->path, "r" ) )
                                 == NULL ) ) {
                 /* the file cannot be opened */
-                populate_info_buffer ( path );
+                populate_info_buffer ( bi->path );
                 return BUFSTAT_ERRNO;
         }
 
         /* ensure the buffer is null-terminated */
-        b_inf->buffer [ LBUF_SZ - 1 ] = '\0';
-        bw = fread ( & ( b_inf->buffer [ b_inf->idx ] ), sizeof ( char ),
-                        LBUF_SZ - 1 - b_inf->idx, b_inf->fp );
+        bi->buffer [ LBUF_SZ - 1 ] = '\0';
+        bw = fread ( & ( bi->buffer [ bi->idx ] ), sizeof ( char ),
+                        LBUF_SZ - 1 - bi->idx, bi->fp );
 
-        return determine_buffer_nature ( bw, b_inf, path );
+        return determine_buffer_nature ( bw, bi, bi->path );
 }
 
 /* init_buffer_instance: initialise a buffer_info_t structure with default
  * values, allocating the large file buffer (LBUF_SZ). This function returns -1
  * on error (errno is set appropriately by malloc), or zero on success. */
 
-static int init_buffer_instance ( struct buffer_info_t * b_inf )
+static int init_buffer_instance ( struct buffer_info_t * bi )
 {
-        b_inf->fp = NULL;
-        b_inf->idx = 0;
-        b_inf->status = BUFSTAT_MORE;
-
-        if ( ( b_inf->buffer = malloc ( sizeof ( char ) * LBUF_SZ ) )
+        if ( ( bi->buffer = malloc ( sizeof ( char ) * LBUF_SZ ) )
                         == NULL ) {
                 populate_info_buffer ( "Large file buffer" );
                 return -1;
         }
+
+        bi->fp = NULL;
+        bi->idx = 0;
+        bi->status = BUFSTAT_MORE;
+        bi->path = NULL;
 
         return 0;
 }
@@ -666,17 +668,63 @@ static int populate_glob ( char repo_base [ NAME_MAX + 1 ], glob_t * glob_buf )
         return 0;
 }
 
+/* print_seamless_buffer: give the illusion of a seamless buffer, by allocating
+ * a relatively small buffer (SBUF_SZ) to accommodate from the current position
+ * to the end of the line, should that line appear in a subsequent buffer. This
+ * function places the file cursor of `bi->fp` to the point after the newline,
+ * to avoid double-searching. If, for any reason, the next line cannot be read
+ * and parsed, " [...]" is printed (see TODO). */
+
+static void print_seamless_buffer ( struct buffer_info_t * bi )
+{
+        char buffer [ SBUF_SZ ], * newline_pos = NULL;
+        long pos = 0;
+        unsigned int newline_diff = 0;
+
+        buffer [ SBUF_SZ - 1 ] = '\0';
+        errno = 0;
+
+        /* (Attempt to) take the current position of the file, so it can be
+         * reverted after the `fread`. This allows `populate_buffer` to
+         * correctly read in the next buffer. To prevent researching the
+         * remainder of the buffer, the position should be incremented to the
+         * immediate character after the located newline, as a double-match in a
+         * line would lead to the same line being printed twice. */
+        if ( ( pos = ftell ( bi->fp ) ) == -1 ) {
+                fputs ( " [...]", stdout );
+                return;
+        }
+
+        /* Failure of this function is trivial; print " [...]" as a fallback.
+         * TODO: print a warning (to stderr) in the event of an error. These
+         * should be optional, disabled with a command-line option. */
+
+        fread ( buffer, sizeof ( char ), SBUF_SZ - 1, bi->fp );
+        newline_pos = strchr ( buffer, '\n' );
+        pos += ( newline_diff = newline_pos - buffer );
+
+        if ( errno != 0 || fseek ( bi->fp, pos, SEEK_SET ) == -1 ||
+                        newline_pos == NULL ) {
+                fputs ( " [...]", stdout );
+                return;
+        }
+
+        buffer [ newline_diff ] = '\0';
+        fputs ( buffer, stdout );
+        buffer [ newline_diff ] = '\n';
+}
+
 /* print_search_result: print a search result, `result_str`, from the repo
  * `repo`, to stdout, respecting the ARG_PRINT_REPO_PATHS and
  * ARG_PRINT_REPO_NAMES command-line arguments. If `truncated` is set (the
- * result continues in another buffer), the acceptable workaround is to append
- * "[...]" to the output match, as the important information has already been
- * written (flags succeed package names). Perhaps this can be changed in the
- * future. TODO: make the truncations less obvious (request a new buffer just in
- * time, and find the end of the next line). */
+ * result continues in another buffer), a temporary SBUF_SZ buffer is allocated
+ * on the stack to print the rest of the line (up until the next '\n'). If this
+ * fails for any reason, " [...]" is printed to indicate a truncation. See
+ * `print_seamless_buffer` for more information. */
 
 static void print_search_result ( const char * result_str,
-                struct repo_t * repo, int truncated, char * needle )
+                struct repo_t * repo, int truncated, char * needle,
+                struct buffer_info_t * bi )
 {
         if ( CHK_ARG ( options, ARG_PRINT_NEEDLE ) != 0 )
                 /* `needle` should probably be the original search string; not
@@ -690,10 +738,11 @@ static void print_search_result ( const char * result_str,
                 printf ( "%s::", repo->name );
 
         fputs ( result_str, stdout );
+
         if ( truncated )
-                puts ( " [...]" );
-        else
-                putchar ( '\n' );
+                print_seamless_buffer ( bi );
+
+        putchar ( '\n' );
 }
 
 /* construct_query: construct an appropriate query, taking `str`, applying the
@@ -736,7 +785,7 @@ static int construct_query ( char query [ QUERY_MAX ], const char * str )
  * implementations, such as Boyer-Moore. */
 
 static void search_buffer ( char buffer [ LBUF_SZ ], char ** needles,
-                int ncount, struct repo_t * repo )
+                int ncount, struct repo_t * repo, struct buffer_info_t * bi )
 {
         int bare_query = 1;
         char * ptr = NULL, query [ QUERY_MAX ], * buffer_start = buffer,
@@ -761,7 +810,8 @@ static void search_buffer ( char buffer [ LBUF_SZ ], char ** needles,
                                         break;
 
                                 print_search_result ( ptr, repo, ( buffer ==
-                                                        NULL ), needles [ i ] );
+                                                        NULL ), needles [ i ],
+                                                bi );
                                 if ( buffer == NULL )
                                         break; /* end of buffer; see `marker` */
 
@@ -796,20 +846,18 @@ static inline char * get_next_file ( glob_t * glob_buf, size_t * idx )
 static int process_glob_list ( struct buffer_info_t * bi, glob_t * glob_buf,
                 char ** needles, int ncount, struct repo_t * repo )
 {
-        char * file_path = NULL;
         size_t file_idx = 0;
 
         for ( ; ; ) {
                 /* attempt to get the next file */
                 if ( ( bi->status == BUFSTAT_BORDR
                                 || bi->status == BUFSTAT_MORE ) &&
-                                ( ( file_path = get_next_file ( glob_buf,
+                                ( ( bi->path = get_next_file ( glob_buf,
                                                                 &file_idx ) )
                                   == NULL ) )
                         break; /* exhausted; next repo */
 
-                switch ( bi->status = populate_buffer ( file_path,
-                                        bi ) ) {
+                switch ( bi->status = populate_buffer ( bi ) ) {
                         case BUFSTAT_ERRNO:
                                 return -1;
                         case BUFSTAT_BORDR:
@@ -817,14 +865,14 @@ static int process_glob_list ( struct buffer_info_t * bi, glob_t * glob_buf,
                                 break;
                         case BUFSTAT_FULL:
                                 search_buffer ( bi->buffer, needles,
-                                                ncount, repo );
+                                                ncount, repo, bi );
                                 break;
                 }
         }
 
         if ( bi->status != BUFSTAT_FULL )
                 /* BUFSTAT_FULL: buffer already searched */
-                search_buffer ( bi->buffer, needles, ncount, repo );
+                search_buffer ( bi->buffer, needles, ncount, repo, bi );
 
         return 0;
 }
@@ -890,11 +938,11 @@ static enum status_t portdir_makeconf ( char base [ PATH_MAX ],
 
         if ( fread ( buffer, sizeof ( char ), PATH_MAX - 1, fp ) <
                         PATH_MAX - 1 && ! feof ( fp ) ) {
-                fclose ( fp );
+                fnull ( &fp );
                 return STATUS_ERRNO;
         }
 
-        fclose ( fp );
+        fnull ( &fp );
 
         if ( ( status = get_keyval_value ( value, buffer, "PORTDIR" ) )
                         != STATUS_OK )
@@ -1046,7 +1094,8 @@ static int prelim_checks ( int argc, char ** argv, int * arg_idx )
 }
 
 /* main: entry point for ash-euses. See args.h for a list and description of the 
- * accepted arguments.
+ * accepted arguments. EXIT_SUCCESS does not necessarily imply a complete
+ * execution, but only indicates that no "hard" error was encountered.
  *
  * Syntax: [OPTION]... [SUBSTRING]... */
 
