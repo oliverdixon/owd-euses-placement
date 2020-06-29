@@ -123,7 +123,8 @@ void print_help_info ( const char * invocation )
                         "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
                         "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
                         "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
-                        "--%-13s -%-3c\t%s\n", invocation,
+                        "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n",
+                        invocation,
 
                         "list-repos", 'r', "Prepend a list of located " \
                                 "repositories (repos.conf/ only).",
@@ -142,6 +143,8 @@ void print_help_info ( const char * invocation )
                         "portdir", 'd', "Attempt to use the PORTDIR value.",
                         "print-needles", 'e', "Prepend each match with the " \
                                 "relevant needle substring.",
+                        "no-interrupt", 'i', "Do not interrupt the " \
+                                "search results with warnings.",
                         "", '\b', "Consider all further arguments as " \
                                 "substrings/queries." );
 }

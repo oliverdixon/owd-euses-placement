@@ -22,8 +22,7 @@ Gentoo developers.
 .IB BASE /profiles/*.desc
 where
 .IR BASE " is the value from the"
-.BR location " attribute. Currently, it does not recurse into the " desc/
-directory, however this is planned for the reasonably immediate future.
+.BR location " attribute, also recursing into the " desc/ " directory."
 .SH OPTIONS
 .TP
 .BR "\-\-help", " \-h"
@@ -53,8 +52,8 @@ is the path of the description file in which the match was found.
 .BR "\-\-strict", " \-s"
 Restrict the searching to the USE-flag field, as opposed to searching the entire
 file. This will significantly reduce the yield of the search on most systems.
-This behaviour is likely to become the default in the near future, replaced with
-.RB a " \-\-lax" " option".
+This behaviour might become the default in the future, replaced with a
+.BR \-\-lax " option."
 .TP
 .BR "\-\-quiet", " \-q"
 .RI "Suppress the complaint message that arises when " PORTDIR " is detected"
@@ -73,10 +72,18 @@ similar to
 .RB " option is set without the " -q " option, a warning will be issued if"
 .BR PORTDIR " is detected and used."
 .TP
-.BR "\-\-print\-needles", "\-e"
+.BR "\-\-print\-needles", " \-e"
 For each search result, print the relevant needle in the form
 .RI ( needle ) " match" ". This option can be combined with the "
 .BR --repo-names " and " --repo-paths " options."
+.TP
+.BR "\-\-no\-interrupt", " \-i"
+Do not interrupt the search results with a non-fatal error/warning on
+.BR stderr ". These mainly appear with warnings regarding errors with the"
+loading of a temporary buffer to seamlessly print a trans-buffer line. Even if
+these warnings are suppressed, it is likely that a fatal error will appear
+shortly after, as the system could not perform an
+.BR fread "(3) call on the USE-description file."
 .TP
 .BR \-\-
 .RB "If " \-\- " is passed on the command-line, all further arguments are"
@@ -120,12 +127,10 @@ describing various key-value pairs to be used by ebuilds.
 .BR ash-euses " uses this file exclusively for the extraction of the "
 .IR PORTDIR " key."
 .TP
-.B profiles/*.desc
-.IB BASE /profiles/*.desc
-.RB "are the files searched " ash-euses ", in which
-.IR BASE " is the base of the current repository. In the near future, this "
-will be expanded significantly to include all files in the
-.IB BASE /profiles/desc/
+.B profiles/{,desc/}*.desc
+.IB BASE /profiles/{,desc/}*.desc
+.RB "are the USE-description files searched " ash-euses ", in which
+.IR BASE " is the base of the current repository
 directory.
 .SH EXAMPLES
 .TP

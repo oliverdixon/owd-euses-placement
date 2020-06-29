@@ -50,7 +50,8 @@ enum warning_t {
         WARNING_ERRNO =  1, /* c.f. errno */
         WARNING_QLONG = -1, /* a query exceeded QUERY_MAX - 1 */
         WARNING_RNONE = -2, /* no repositories; nothing to do */
-        WARNING_QNONE = -3  /* no queries; nothing to do */
+        WARNING_QNONE = -3, /* no queries; nothing to do */
+        WARNING_NONWL = -4  /* no newline found in the small buffer */
 };
 
 enum dir_status_t {
@@ -120,6 +121,8 @@ static const char * provide_gen_warning ( int status )
                 case WARNING_QLONG: return "The query is too long.";
                 case WARNING_RNONE: return "No repositories were found.";
                 case WARNING_QNONE: return "No queries were provided.";
+                case WARNING_NONWL: return "The entry did not end with a " \
+                                        "new-line.";
 
                 default: return "Unknown warning.";
         }
@@ -483,7 +486,9 @@ static int feof_stream ( FILE * fp )
         if ( fseek ( fp, pos, SEEK_SET ) == -1 )
                 return -1;
 
-        return ( pos == len );
+        /* Due to the behaviour of `print_seamless_buffer`, `pos` may exceed
+         * `len`, but still be valid (and indicate end-of-file). */
+        return ( pos >= len );
 }
 
 /* organise_buffer: given a populated buffer `bi->buffer`, this function
@@ -673,15 +678,17 @@ static int populate_glob ( char repo_base [ NAME_MAX + 1 ], glob_t * glob_buf )
  * to the end of the line, should that line appear in a subsequent buffer. This
  * function places the file cursor of `bi->fp` to the point after the newline,
  * to avoid double-searching. If, for any reason, the next line cannot be read
- * and parsed, " [...]" is printed (see TODO). */
+ * and parsed, " [...]" is printed.
+ *
+ * This function returns -1 if a warning has been issued, and zero if not.
+ * TODO: split this function, perhaps into `process_seamless_buffer` .*/
 
-static void print_seamless_buffer ( struct buffer_info_t * bi )
+static int print_seamless_buffer ( struct buffer_info_t * bi )
 {
         char buffer [ SBUF_SZ ], * newline_pos = NULL;
         long pos = 0;
         unsigned int newline_diff = 0;
 
-        buffer [ SBUF_SZ - 1 ] = '\0';
         errno = 0;
 
         /* (Attempt to) take the current position of the file, so it can be
@@ -691,27 +698,55 @@ static void print_seamless_buffer ( struct buffer_info_t * bi )
          * immediate character after the located newline, as a double-match in a
          * line would lead to the same line being printed twice. */
         if ( ( pos = ftell ( bi->fp ) ) == -1 ) {
-                fputs ( " [...]", stdout );
-                return;
+                fputs ( " [...]\n", stdout );
+                if ( CHK_ARG ( options, ARG_NO_MIDBUF_WARN ) == 0 ) {
+                        populate_info_buffer ( bi->path );
+                        print_warning ( WARNING_ERRNO, &provide_gen_warning );
+                }
+
+                return -1;
         }
 
-        /* Failure of this function is trivial; print " [...]" as a fallback.
-         * TODO: print a warning (to stderr) in the event of an error. These
-         * should be optional, disabled with a command-line option. */
+        /* Failure of this function is trivial; print " [...]" as a fallback. */
 
         fread ( buffer, sizeof ( char ), SBUF_SZ - 1, bi->fp );
         newline_pos = strchr ( buffer, '\n' );
         pos += ( newline_diff = newline_pos - buffer );
 
-        if ( errno != 0 || fseek ( bi->fp, pos, SEEK_SET ) == -1 ||
-                        newline_pos == NULL ) {
-                fputs ( " [...]", stdout );
-                return;
+        if ( newline_pos == NULL ) {
+                /* no newline found */
+                fputs ( " [...]\n", stdout );
+                if ( CHK_ARG ( options, ARG_NO_MIDBUF_WARN ) == 0 ) {
+                        populate_info_buffer ( bi->path );
+
+                        if ( fseek ( bi->fp, pos, SEEK_SET ) == -1 )
+                                /* Warning for a failed fseek takes precedence
+                                 * over the absence of a newline. */
+                                print_warning ( WARNING_ERRNO,
+                                                &provide_gen_warning );
+                        else
+                                print_warning ( WARNING_NONWL,
+                                                &provide_gen_warning );
+                }
+
+                return -1;
+        }
+
+        if ( errno != 0 || fseek ( bi->fp, pos, SEEK_SET ) == -1 ) {
+                fputs ( " [...]\n", stdout );
+                if ( CHK_ARG ( options, ARG_NO_MIDBUF_WARN ) == 0 ) {
+                        populate_info_buffer ( bi->path );
+                        print_warning ( WARNING_ERRNO, &provide_gen_warning );
+                }
+
+                return -1;
         }
 
         buffer [ newline_diff ] = '\0';
         fputs ( buffer, stdout );
         buffer [ newline_diff ] = '\n';
+
+        return 0;
 }
 
 /* print_search_result: print a search result, `result_str`, from the repo
@@ -739,10 +774,10 @@ static void print_search_result ( const char * result_str,
 
         fputs ( result_str, stdout );
 
-        if ( truncated )
-                print_seamless_buffer ( bi );
-
-        putchar ( '\n' );
+        if ( !truncated || ( truncated && print_seamless_buffer ( bi ) == 0 ) )
+                /* If a warning has been issued by `print_warning`, there is no
+                 * need to add an additional newline. */
+                putchar ( '\n' );
 }
 
 /* construct_query: construct an appropriate query, taking `str`, applying the

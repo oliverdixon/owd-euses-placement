@@ -6,7 +6,7 @@
 
 #include <stdint.h>
 
-#define CHK_ARG(val, n) ( val &  n )
+#define CHK_ARG(val, n) ( val & n )
 
 /* The following command-line options are currently recognised:
  *
@@ -24,20 +24,23 @@
  *  - ARG_SEARCH_NO_CASE: perform case-insensitive searching;
  *  - ARG_ATTEMPT_PORTDIR: before attempting to use repos.conf/, try extracting
  *    PORTDIR from the environment variable string or make.conf;
- *  - ARG_PRINT_NEEDLE: prepend the relevant search needle to every match. */
+ *  - ARG_PRINT_NEEDLE: prepend the relevant search needle to every match;
+ *  - ARG_NO_MIDBUF_WARN: suppress mid-buffer warnings; do not interrupt the
+ *    search results with non-fatal errors/warnings. */
 
 enum arg_positions_t {
-        ARG_UNKNOWN          =   0,
-        ARG_PRINT_REPO_NAMES =   1,
-        ARG_PRINT_REPO_PATHS =   2,
-        ARG_SHOW_HELP        =   4,
-        ARG_SHOW_VERSION     =   8,
-        ARG_LIST_REPOS       =  16,
-        ARG_SEARCH_STRICT    =  32,
-        ARG_NO_COMPLAINING   =  64,
-        ARG_SEARCH_NO_CASE   = 128,
-        ARG_ATTEMPT_PORTDIR  = 256,
-        ARG_PRINT_NEEDLE     = 512  /* 10th bit */
+        ARG_UNKNOWN          =    0,
+        ARG_PRINT_REPO_NAMES =    1,
+        ARG_PRINT_REPO_PATHS =    2,
+        ARG_SHOW_HELP        =    4,
+        ARG_SHOW_VERSION     =    8,
+        ARG_LIST_REPOS       =   16,
+        ARG_SEARCH_STRICT    =   32,
+        ARG_NO_COMPLAINING   =   64,
+        ARG_SEARCH_NO_CASE   =  128,
+        ARG_ATTEMPT_PORTDIR  =  256,
+        ARG_PRINT_NEEDLE     =  512,
+        ARG_NO_MIDBUF_WARN   = 1024  /* 11th bit */
 };
 
 typedef uint8_t opts_t;
