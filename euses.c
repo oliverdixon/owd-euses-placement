@@ -1,16 +1,21 @@
 /* ash-euses: main driver
  * Ashley Dixon. */
 
+#define _GNU_SOURCE
+/* strcasestr */
+#include <string.h>
+#undef _GNU_SOURCE
+
 #include <stdlib.h>
 #include <errno.h>
 #include <stdio.h>
-#include <string.h>
 #include <dirent.h>
 #include <glob.h>
 
 #include "euses.h"
 #include "args.h"
 #include "converse.h"
+#include "stack.h"
 
 #define QUERY_MAX ( 256  )
 #define BUFFER_SZ ( 4096 )
@@ -215,8 +220,8 @@ static char * skip_whitespace ( char * str )
 {
         for ( unsigned int i = 0; ; i++ )
                 switch ( str [ i ] ) {
-                        case 0x20:
-                        case 0x09:
+                        case 0x20: /* space */
+                        case 0x09: /* horizontal tabulation */
                                 continue;
                         case 0x00:
                                 /* assumes the string is null-terminated */
@@ -440,15 +445,10 @@ static enum status_t enumerate_repo_descriptions ( char base [ ],
                 }
 
         dnull ( &dp );
+
         if ( gentoo_hit ) {
-                /* print the repository stack, if appropriate */
-                if ( CHK_ARG ( options, ARG_LIST_REPOS ) != 0 ) {
-                        fputs ( "Configuration directory: ", stdout );
-                        puts ( base );
-                        putchar ( '\n' );
-                        stack_print ( stack );
-                        putchar ( '\n' );
-                }
+                if ( CHK_ARG ( options, ARG_LIST_REPOS ) != 0 )
+                        list_repos ( stack, base );
 
                 return STATUS_OK;
         }
@@ -556,9 +556,9 @@ static enum buffer_status_t populate_buffer ( char * path,
 
         /* ensure the buffer is null-terminated */
         b_inf->buffer [ LBUF_SZ - 1 ] = '\0';
-
         bw = fread ( & ( b_inf->buffer [ b_inf->idx ] ), sizeof ( char ),
                         LBUF_SZ - 1 - b_inf->idx, b_inf->fp );
+
         return determine_buffer_nature ( bw, b_inf, path );
 }
 

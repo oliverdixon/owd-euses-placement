@@ -29,10 +29,10 @@ void print_fatal ( const char * prefix, int status,
                 const char * ( * get_detail ) ( int ) )
 {
         fprintf ( stderr, PROGRAM_NAME " caught a fatal error and cannot " \
-                        "continue.\nRe-run with \"--help\" or \"-h\" for help" \
-                        ".\n\n\tSummary: \"%s\"\n\tOffending Article:" \
-                        " \"%s\"\n\tError Detail: \"%s\"\n\tStatus Code: %d%s" \
-                        "\n\tProgram Exit Code: %d\n",
+                        "continue.\nRe-run with \"--help --version\" or " \
+                        "\"-hv\" for help.\n\n\tSummary: \"%s\"\n\tOffending " \
+                        "Article: \"%s\"\n\tError Detail: \"%s\"\n\tStatus " \
+                        "Code: %d%s\n\tProgram Exit Code: %d\n",
 
                         prefix, ( info_buffer [ 0 ] != '\0' ) ? info_buffer :
                         "N/A", get_detail ( status ), ( status == 1 ) ? errno
@@ -156,7 +156,7 @@ void print_help_info ( const char * invocation )
 void portdir_complain (  )
 {
         if ( CHK_ARG ( options, ARG_NO_COMPLAINING ) != 0 )
-                return; /* this will be inlined, so it's not _that_ terrible */
+                return;
 
         fputs ( "WARNING: " PROGRAM_NAME " has detected the existence of " \
                         "PORTDIR,\neither as an environment variable, or " \
@@ -171,5 +171,29 @@ void portdir_complain (  )
                 fputs ( "WARNING: Disregarding the repository-listing request" \
                                 " due to the\npresence of PORTDIR.\n\n",
                                 stderr );
+}
+
+/* [exposed function] list_repos: pretty-print a list of repositories, in which
+ * `stack` is the full stack of repository details, and `base` is the
+ * repo-configuration base directory (e.g., "/etc/portage/repos.conf"). */
+
+void list_repos ( struct repo_stack_t * stack, char * base )
+{
+        struct repo_t * repo = stack_peek ( stack );
+
+        fputs ( "Configuration directory: ", stdout );
+        puts ( base );
+        putchar ( '\n' );
+
+        if ( repo == NULL )
+                puts ( "<No repositories found>" );
+        else {
+                do
+                        printf ( "Name: %-10s\tLocation: %-16s\n", repo->name,
+                                        repo->location );
+                while ( ( repo = repo->next ) != NULL );
+
+                putchar ( '\n' );
+        }
 }
 
