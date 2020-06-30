@@ -35,6 +35,10 @@
 #define GLOB_PATTERN_ROOT "/profiles/*.desc"
 #define GLOB_PATTERN_DESC "/profiles/desc/*.desc"
 
+/* Patterns for ARG_PKG_FILES_ONLY */
+#define GLOB_PATTERN_ROOT_PKG "/profiles/*.local*.desc"
+#define GLOB_PATTERN_DESC_PKG "/profiles/desc/*.local*.desc"
+
 enum status_t {
         STATUS_ERRNO  =  1, /* c.f. perror or strerror on errno */
         STATUS_OK     =  0, /* everything is OK */
@@ -52,7 +56,9 @@ enum warning_t {
         WARNING_QLONG = -1, /* a query exceeded QUERY_MAX - 1 */
         WARNING_RNONE = -2, /* no repositories; nothing to do */
         WARNING_QNONE = -3, /* no queries; nothing to do */
-        WARNING_NONWL = -4  /* no newline found in the small buffer */
+        WARNING_NONWL = -4, /* no newline found in the small buffer */
+        WARNING_PDEXT = -5, /* PORTDIR was detected */
+        WARNING_PDLST = -6  /* ARG_LIST_REPOS was set with PORTDIR */
 };
 
 enum dir_status_t {
@@ -124,6 +130,18 @@ static const char * provide_gen_warning ( int status )
                 case WARNING_QNONE: return "No queries were provided.";
                 case WARNING_NONWL: return "The entry did not end with a " \
                                         "new-line.";
+                case WARNING_PDEXT: return PROGRAM_NAME " has detected the " \
+                                        "existence of PORTDIR, either as an " \
+                                        "environment variable, or existing " \
+                                        "in a Portage configuration file. It " \
+                                        "will be respected over the " \
+                                        "repos.conf/ format for this session" \
+                                        ", however it is important to update" \
+                                        "your Gentoo-like system to the " \
+                                        "latest standards.";
+                case WARNING_PDLST: return "Disregarding the repository-" \
+                                        "listing request due to the presence" \
+                                        " of PORTDIR.";
 
                 default: return "Unknown warning.";
         }
@@ -638,10 +656,11 @@ static char * find_line_bounds ( char * buffer_start, char * substr_start,
 }
 
 /* populate_glob: collate all entries matching repo_base + GLOB_PATTERN_
- * {ROOT,DESC} in the glob_buf using glob(3). This function returns -1 on
- * failure---in which case errno and the information buffer are set
- * appropriately, and zero on success. It is the responsibility of the caller to
- * use globfree(3) for cleaning up the static allocations of glob. */
+ * {ROOT,DESC} in the glob_buf using glob(3). If ARG_PKG_FILES_ONLY is set, the
+ * _PKG variants are used. This function returns -1 on failure---in which case
+ * errno and the information buffer are set appropriately, and zero on success.
+ * It is the responsibility of the caller to use globfree(3) for cleaning up the
+ * static allocations of glob. */
 
 static int populate_glob ( char repo_base [ NAME_MAX + 1 ], glob_t * glob_buf )
 {
@@ -651,7 +670,10 @@ static int populate_glob ( char repo_base [ NAME_MAX + 1 ], glob_t * glob_buf )
 
         /* This is an awkward chain of returns, but it must be done as such
          * (avoid `goto`). */
-        if ( construct_path ( repo_base, NULL, GLOB_PATTERN_ROOT ) == -1 )
+        if ( construct_path ( repo_base, NULL, ( CHK_ARG ( options,
+                                                ARG_PKG_FILES_ONLY ) != 0 ) ?
+                                GLOB_PATTERN_ROOT_PKG : GLOB_PATTERN_ROOT )
+                        == -1 )
                 return -1;
 
         if ( ( status = glob ( repo_base, 0, NULL, glob_buf ) ) == GLOB_NOSPACE
@@ -661,7 +683,10 @@ static int populate_glob ( char repo_base [ NAME_MAX + 1 ], glob_t * glob_buf )
         }
 
         repo_base [ base_len ] = '\0';
-        if ( construct_path ( repo_base, NULL, GLOB_PATTERN_DESC ) == -1 )
+        if ( construct_path ( repo_base, NULL, ( CHK_ARG ( options,
+                                                ARG_PKG_FILES_ONLY ) != 0 ) ?
+                                GLOB_PATTERN_DESC_PKG : GLOB_PATTERN_DESC )
+                        == -1 )
                 return -1;
 
         if ( ( status = glob ( repo_base, GLOB_APPEND, NULL, glob_buf ) )
@@ -989,11 +1014,29 @@ static enum status_t portdir_makeconf ( char base [ PATH_MAX ],
                         != STATUS_OK )
                 return ( status == STATUS_INILOC ) ? STATUS_OK : status;
         else
-                /* Extraneous hyphens make no difference when placed as prefixes
+                /* Extraneous obliques make no difference when placed as prefixes
                  * and suffixes to a UNIX path. */
                 replace_char ( value, '"', '/' );
 
         return STATUS_OK;
+}
+
+/* portdir_complain: issue an appropriate warning regarding the existence of
+ * PORTDIR; this can be disabled entirely using ARG_NO_COMPLAINING. If
+ * ARG_LIST_REPOS is also set, a further warning is issued stating that a
+ * session with PORTDIR renders a repository-listing useless. */
+
+static void portdir_complain ( )
+{
+        if ( CHK_ARG ( options, ARG_NO_COMPLAINING ) == 0 ) {
+                print_warning ( WARNING_PDEXT, &provide_gen_warning );
+                putchar ( '\n' );
+
+                if ( CHK_ARG ( options, ARG_LIST_REPOS ) != 0 ) {
+                        print_warning ( WARNING_PDLST, &provide_gen_warning );
+                        putchar ( '\n' );
+                }
+        }
 }
 
 /* portdir_attempt_envvar: attempt to retrieve the value of PORTDIR from the

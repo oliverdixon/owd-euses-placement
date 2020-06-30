@@ -85,6 +85,11 @@ these warnings are suppressed, it is likely that a fatal error will appear
 shortly after, as the system could not perform an
 .BR fread "(3) call on the USE-description file."
 .TP
+.BR "\-\-package", " \-k"
+Restrict the search to category-package files, excluding description files of
+global USE-flags. In practice, this only includes files containing
+.BR *.local " in the search."
+.TP
 .BR \-\-
 .RB "If " \-\- " is passed on the command-line, all further arguments are"
 considered as substrings.
@@ -131,7 +136,8 @@ describing various key-value pairs to be used by ebuilds.
 .IB BASE /profiles/{,desc/}*.desc
 .RB "are the USE-description files searched " ash-euses ", in which
 .IR BASE " is the base of the current repository
-directory.
+.RB "directory. If the " --package " option is set, the searching pattern is"
+.RB "restricted to " profiles/{,desc/}*.local*.desc .
 .SH EXAMPLES
 .TP
 .B ash-euses -prv qt5
@@ -148,6 +154,6 @@ substring, appending the name of the relevant repository to each result.
 .RB "repositories described in the " repos.conf " directory."
 .SH SEE ALSO
 .BR "euses" "(1), " "emerge" "(1), " "make.conf" "(5), " "portage" "(5), "
-.BR ebuild (1)
+.BR "ebuild" "(1), " glob (3)
 .SH AUTHOR
 .RI "Ashley Dixon <" ash@suugaku.co.uk >

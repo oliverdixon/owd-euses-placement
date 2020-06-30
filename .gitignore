@@ -1,6 +1,7 @@
 nc/
 ebuild/
 .*
+Makefile
 
 # Binaries
 

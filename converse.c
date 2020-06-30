@@ -1,4 +1,4 @@
-/* ash-euses: direct reporting functions, c.f.\ converse.h
+/* ash-euses: direct reporting functions, c.f.\ converse.h.
  * Ashley Dixon. */
 
 #include <stdio.h>
@@ -52,8 +52,12 @@ void print_fatal ( const char * prefix, int status,
 
 void print_warning ( int status, const char * ( * get_detail ) ( int ) )
 {
-        fprintf ( stderr, PROGRAM_NAME ": warning (\"%s\"): %d(%c): %s\n",
-                        ( info_buffer [ 0 ] != '\0' ) ? info_buffer : "N/A",
+        fputs ( PROGRAM_NAME ": warning", stderr );
+
+        if ( info_buffer [ 0 ] != '\0' )
+                fprintf ( stderr, " (\"%s\")", info_buffer );
+
+        fprintf ( stderr, ": %d(%c): %s\n",
                         ( status == 1 ) ? errno : status, ( status == 1 ) ? 'S'
                         : 'I', get_detail ( status ) );
 }
@@ -123,8 +127,8 @@ void print_help_info ( const char * invocation )
                         "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
                         "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
                         "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
-                        "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n",
-                        invocation,
+                        "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
+                        "--%-13s -%-3c\t%s\n", invocation,
 
                         "list-repos", 'r', "Prepend a list of located " \
                                 "repositories (repos.conf/ only).",
@@ -137,43 +141,18 @@ void print_help_info ( const char * invocation )
                                 "information to the output.",
                         "strict", 's', "Search only in the flag field, " \
                                 "excluding the description.",
-                        "quiet", 'q', "Do not complain about PORTDIR.",
-                        "no-case", 'c', "Perform a case-insensitive search "\
-                                "across the files.",
                         "portdir", 'd', "Attempt to use the PORTDIR value.",
+                        "quiet", 'q', "Do not complain about PORTDIR.",
+                        "no-case", 'c', "Perform a case-insensitive search " \
+                                "across the files.",
                         "print-needles", 'e', "Prepend each match with the " \
                                 "relevant needle substring.",
                         "no-interrupt", 'i', "Do not interrupt the " \
                                 "search results with warnings.",
+                        "package", 'k', "Restrict the search to category-" \
+                                "package description files.",
                         "", '\b', "Consider all further arguments as " \
                                 "substrings/queries." );
-}
-
-/* [exposed function] portdir_complain: providing the absence of the
- * ARG_NO_COMPLAINING flag, this function prints a pre-defined warning regarding
- * the existence of the now- deprecated PORTDIR environment variable/make.conf
- * attribute. If the ARG_LIST_REPOS option is set, a warning is also sent to
- * stderr, announcing that the existence of PORTDIR disables the listing
- * feature. */
-
-void portdir_complain (  )
-{
-        if ( CHK_ARG ( options, ARG_NO_COMPLAINING ) != 0 )
-                return;
-
-        fputs ( "WARNING: " PROGRAM_NAME " has detected the existence of " \
-                        "PORTDIR,\neither as an environment variable, or " \
-                        "existing in a Portage\nconfiguration file. It will be " \
-                        "respected over the repos.conf/\nformat for this " \
-                        "session, however to remove this warning from\neach " \
-                        "run of" PROGRAM_NAME ", please remove all traces " \
-                        "of it from your\nsystem and adopt the new, more " \
-                        "flexible syntax.\n\n", stderr );
-
-        if ( CHK_ARG ( options, ARG_LIST_REPOS ) != 0 )
-                fputs ( "WARNING: Disregarding the repository-listing request" \
-                                " due to the\npresence of PORTDIR.\n\n",
-                                stderr );
 }
 
 /* [exposed function] list_repos: pretty-print a list of repositories, in which
@@ -189,14 +168,13 @@ void list_repos ( struct repo_stack_t * stack, char * base )
         putchar ( '\n' );
 
         if ( repo == NULL )
-                puts ( "<No repositories found>" );
-        else {
-                do
-                        printf ( "Name: %-10s\tLocation: %-16s\n", repo->name,
-                                        repo->location );
-                while ( ( repo = repo->next ) != NULL );
+                return; /* A lack of repositories has already been caught. */
 
-                putchar ( '\n' );
-        }
+        do
+                printf ( "Name: %-10s\tLocation: %-16s\n", repo->name,
+                                repo->location );
+        while ( ( repo = repo->next ) != NULL );
+
+        putchar ( '\n' );
 }
 

@@ -50,12 +50,15 @@ static const char * provide_arg_error ( int status )
 
 static int match_arg ( const char * arg, enum arg_positions_t * apos )
 {
+        /* TODO: improve these definitions, such that the "--" or "-" prefix is
+         * assumed, and does not have to be written to each constant. */
         static const char * arg_full [ ] = {
                 "--repo-names", "--repo-paths", "--help", "--version",
                 "--list-repos", "--strict", "--quiet", "--no-case", "--portdir",
-                "--print-needles", "--no-interrupt"
+                "--print-needles", "--no-interrupt", "--package"
         }, * arg_abv [ ] = {
-                "-n", "-p", "-h", "-v", "-r", "-s", "-q", "-c", "-d", "-e", "-i"
+                "-n", "-p", "-h", "-v", "-r", "-s", "-q", "-c", "-d", "-e",
+                "-i", "-k"
         };
 
         /* `fargc`: full argument count. This should be more than or equal to
@@ -83,7 +86,7 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
 
 static enum argument_status_t match_abbr_arg ( const char * str )
 {
-        static const char * abbr_list = "nphvrsqcdei";
+        static const char * abbr_list = "nphvrsqcdeik";
         const int abbr_sz = strlen ( abbr_list );
         size_t len = strlen ( str );
         int found = 0;

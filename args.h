@@ -26,7 +26,10 @@
  *    PORTDIR from the environment variable string or make.conf;
  *  - ARG_PRINT_NEEDLE: prepend the relevant search needle to every match;
  *  - ARG_NO_MIDBUF_WARN: suppress mid-buffer warnings; do not interrupt the
- *    search results with non-fatal errors/warnings. */
+ *    search results with non-fatal errors/warnings;
+ *  - ARG_PKG_FILES_ONLY: only search files whose names contain ".local". In
+ *    practice, this restricts the search to files only containing category-
+ *    package pairs, and exclude global USE-flag-description files. */
 
 enum arg_positions_t {
         ARG_UNKNOWN          =    0,
@@ -40,7 +43,8 @@ enum arg_positions_t {
         ARG_SEARCH_NO_CASE   =  128,
         ARG_ATTEMPT_PORTDIR  =  256,
         ARG_PRINT_NEEDLE     =  512,
-        ARG_NO_MIDBUF_WARN   = 1024  /* 11th bit */
+        ARG_NO_MIDBUF_WARN   = 1024,
+        ARG_PKG_FILES_ONLY   = 2048  /* 12th bit */
 };
 
 typedef uint8_t opts_t;
