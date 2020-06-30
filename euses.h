@@ -11,7 +11,7 @@
 #define PROGRAM_AUTHOR_EMAIL "ash@suugaku.co.uk"
 #define PROGRAM_YEAR         "MMXX"
 #define PROGRAM_URL          "http://git.suugaku.co.uk/" PROGRAM_NAME "/"
-#define PROGRAM_VERSION      "0.2"
+#define PROGRAM_VERSION      "0.3-prerelease"
 #define PROGRAM_LICENCE_NAME "WTF Public Licence"
 #define PROGRAM_LICENCE_URL  "http://www.wtfpl.net/about/"
 

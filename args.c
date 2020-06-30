@@ -18,7 +18,8 @@ enum argument_status_t {
         ARGSTAT_LACK   = -3, /* not enough arguments were provided */
         ARGSTAT_EMPTY  = -4, /* the provided argument was meaningless/empty */
         ARGSTAT_UNABBR = -5, /* the command-abbreviation list was erroneous */
-        ARGSTAT_NOMORE = -6  /* further arguments should not be considered */
+        ARGSTAT_NOMORE = -6, /* further arguments should not be considered */
+        ARGSTAT_NOMREE = -7  /* ARGSTAT_NOMORE, but it was explicitly defined */
 };
 
 opts_t options = 0;
@@ -50,15 +51,15 @@ static const char * provide_arg_error ( int status )
 
 static int match_arg ( const char * arg, enum arg_positions_t * apos )
 {
-        /* TODO: improve these definitions, such that the "--" or "-" prefix is
-         * assumed, and does not have to be written to each constant. */
         static const char * arg_full [ ] = {
-                "--repo-names", "--repo-paths", "--help", "--version",
-                "--list-repos", "--strict", "--quiet", "--no-case", "--portdir",
-                "--print-needles", "--no-interrupt", "--package"
-        }, * arg_abv [ ] = {
-                "-n", "-p", "-h", "-v", "-r", "-s", "-q", "-c", "-d", "-e",
-                "-i", "-k"
+                "repo-names", "repo-paths", "help", "version", "list-repos",
+                "strict", "quiet", "no-case", "portdir", "print-needles",
+                "no-interrupt", "package"
+        }, arg_abv [ ] = {
+                /* For a long-form argument which does not have an abbreviated
+                 * form, the corresponding entry in arg_abv should be a NULL-
+                 * terminator. */
+                'n', 'p', 'h', 'v', 'r', 's', 'q', 'c', 'd', 'e', 'i', 'k'
         };
 
         /* `fargc`: full argument count. This should be more than or equal to
@@ -67,10 +68,12 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
 
         /* if the corresponding arg_abv value is NULL, there is no
          * shortened counterpart against which to check */
-        for ( int i = 0; i < fargc; i++ )
-                if ( strcmp ( arg, arg_full [ i ] ) == 0 ||
-                                ( arg_abv [ i ] != NULL &&
-                                  strcmp ( arg, arg_abv [ i ] ) == 0 ) ) {
+        for ( int i = 0; i < fargc && arg [ 0 ] == '-'; i++ )
+                if ( ( arg [ 1 ] == '-' && strcmp ( & ( arg [ 2 ] ),
+                                                arg_full [ i ] ) == 0 )
+                                || ( arg_abv [ i ] != '\0' &&
+                                        arg [ 1 ] == arg_abv [ i ] &&
+                                        arg [ 2 ] == '\0' ) ) {
                         *apos = 1 << i;
                         break;
                 }
@@ -127,10 +130,12 @@ static enum argument_status_t argument_subprocessor ( char * arg )
         enum argument_status_t argstat = ARGSTAT_OK;
         enum arg_positions_t apos = ARG_UNKNOWN;
 
+        if ( arg [ 0 ] != '-' )
+                return ARGSTAT_NOMORE;
+
         /* This statement is safe, as `arg` is null-terminated. */
-        if ( arg [ 0 ] != '-' || ( arg [ 0 ] == '-' && arg [ 1 ] == '-' &&
-                                arg [ 2 ] == '\0' ) )
-                return ARGSTAT_NOMORE; /* do not consider further arguments */
+        if ( arg [ 0 ] == '-' && arg [ 1 ] == '-' && arg [ 2 ] == '\0' )
+                return ARGSTAT_NOMREE;
 
         if ( arg [ 1 ] == '\0' ) {
                 /* check for an empty argument ("-<null>") */
@@ -188,6 +193,12 @@ int process_args ( int argc, char ** argv, int * advanced_idx )
                         if ( argstat == ARGSTAT_NOMORE )
                                 /* do not consider further arguments */
                                 break;
+
+                        if ( argstat == ARGSTAT_NOMREE ) {
+                                /* skip past the explicit argument-terminator */
+                                i++;
+                                break;
+                        }
 
                         print_fatal ( ERROR_PREFIX, argstat,
                                         &provide_arg_error );
