@@ -31,6 +31,13 @@
  *      http://www-igm.univ-mlv.fr/~lecroq/string/node26.html */
 
 #include <stddef.h>
+#include <string.h>
+
+/* HAYSTACK_OVERSHOOT: the amount (in terms of cachelines) which the searching
+ * driver should add to the length of the needle when determining the size of
+ * the haystack. This is for improved performance. */
+
+#define HAYSTACK_OVERSHOOT ( 256 )
 
 /* max_suffix_l: calculate the maximal suffix of `needle`, which is of length
  * `needle_len`, and place the period in `*period`. The _l variant computes the
@@ -110,5 +117,53 @@ static size_t max_suffix_m ( const unsigned char * needle,
         }
 
         return max_suffix;
+}
+
+/* twoway_search: TODO */
+
+static char * twoway_search ( const unsigned char * haystack,
+                const unsigned char * needle )
+{
+        /* no-op */
+        return NULL;
+}
+
+/* _strstr: local driver for the `strstr` reimplementation. This function
+ * expects unsigned character arrays, and returns the location of `needle` in
+ * `haystack`. If the input is trivially erroneous---e.g., if the length of the
+ * haystack is shorter than that of the needle---NULL is returned. If a `needle`
+ * is not provided, `haystack` is immediately returned. */
+
+static char * _strstr ( const unsigned char * haystack,
+                const unsigned char * needle )
+{
+        size_t haystack_len = 0, needle_len = 0;
+
+        if ( needle [ 0 ] == '\0' )
+                /* If the `needle` has not been provided, return the haystack.
+                 * I'm not sure whether this is the best course-of-action for
+                 * erroneous input, however returning NULL would force
+                 * extraneous behaviour from the already-misbehaving caller. */
+                return ( char * ) haystack;
+
+        /* Inspired by the glibc `strcasestr` implementation: reading a few
+         * cachelines ahead of `needle_len` when determining the size of
+         * `haystack` will create improved performance for a match occurring
+         * early in a voluminous haystack.
+         *
+         * Aside: performing these (parenthesised) assignments in the `return`
+         * statement leads to undefined sequence points. Shame, as that could
+         * have been one hell of a line. */
+
+        needle_len = strlen ( ( char * ) needle );
+        haystack_len = strnlen ( ( char * ) haystack,
+                        needle_len + HAYSTACK_OVERSHOOT );
+
+        /* A `needle` which is shorter than a `haystack` cannot match
+         * anything in the haystack. In this rare occurrence, returning
+         * NULL is appropriate (c.f.\ glibc implementation). */
+
+        return ( needle_len > haystack_len ) ?
+                NULL : twoway_search ( haystack, needle );
 }
 
