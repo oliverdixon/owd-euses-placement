@@ -29,7 +29,8 @@
  *    search results with non-fatal errors/warnings;
  *  - ARG_PKG_FILES_ONLY: only search files whose names contain ".local". In
  *    practice, this restricts the search to files only containing category-
- *    package pairs, and exclude global USE-flag-description files. */
+ *    package pairs, and exclude global USE-flag-description files;
+ *  - ARG_COLOUR_OUTPUT: make the output pretty and colourful. */
 
 enum arg_positions_t {
         ARG_UNKNOWN          =    0,
@@ -44,7 +45,8 @@ enum arg_positions_t {
         ARG_ATTEMPT_PORTDIR  =  256,
         ARG_PRINT_NEEDLE     =  512,
         ARG_NO_MIDBUF_WARN   = 1024,
-        ARG_PKG_FILES_ONLY   = 2048  /* 12th bit */
+        ARG_PKG_FILES_ONLY   = 2048,
+        ARG_COLOUR_OUTPUT    = 4096  /* 13th bit */
 };
 
 typedef uint8_t opts_t;

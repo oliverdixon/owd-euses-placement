@@ -54,12 +54,12 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
         static const char * arg_full [ ] = {
                 "repo-names", "repo-paths", "help", "version", "list-repos",
                 "strict", "quiet", "no-case", "portdir", "print-needles",
-                "no-interrupt", "package"
+                "no-interrupt", "package", "colour"
         }, arg_abv [ ] = {
                 /* For a long-form argument which does not have an abbreviated
                  * form, the corresponding entry in arg_abv should be a NULL-
                  * terminator. */
-                'n', 'p', 'h', 'v', 'r', 's', 'q', 'c', 'd', 'e', 'i', 'k'
+                'n', 'p', 'h', 'v', 'r', 's', 'q', 'c', 'd', 'e', 'i', 'k', 'o'
         };
 
         /* `fargc`: full argument count. This should be more than or equal to
@@ -89,7 +89,7 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
 
 static enum argument_status_t match_abbr_arg ( const char * str )
 {
-        static const char * abbr_list = "nphvrsqcdeik";
+        static const char * abbr_list = "nphvrsqcdeiko";
         const int abbr_sz = strlen ( abbr_list );
         size_t len = strlen ( str );
         int found = 0;

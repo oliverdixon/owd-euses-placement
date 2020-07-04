@@ -31,6 +31,20 @@
 #define PORTAGE_MAKECONF   "/../make.conf"
 #define DEFAULT_REPO_NAME  "gentoo"
 
+#ifndef COLOUR_DEFAULT
+#define COLOUR_DEFAULT "\033[0m"
+#endif
+
+#ifndef COLOUR_PACKAGE
+/* Colour for category-package names */
+#define COLOUR_PACKAGE "\033[0;31m"
+#endif
+
+#ifndef COLOUR_USEFLAG
+/* Colour for USE-flags */
+#define COLOUR_USEFLAG "\033[0;32m"
+#endif
+
 /* Globbin' patterns relative to the repository base locations. */
 #define GLOB_PATTERN_ROOT "/profiles/*.desc"
 #define GLOB_PATTERN_DESC "/profiles/desc/*.desc"
@@ -780,6 +794,45 @@ static int print_seamless_buffer ( struct buffer_info_t * bi )
         return 0;
 }
 
+/* print_coloured_result: print `result_str` to stdout using the COLOUR_PACKAGE
+ * and COLOUR_USEFLAG colours, with the flag description being printed in
+ * COLOUR_DEFAULT. If an entry is poorly formatted, it is silently skipped. */
+
+static void print_coloured_result ( char * result_str )
+{
+        /* strstr, on most libc implementations, is extremely fast for short
+         * needles (less than three characters). Only when the needle exceeds
+         * 256 characters is the standard two-way algorithm used, and even that
+         * uses a shift table. */
+        size_t sep1_idx = strchr ( result_str, ':' ) - result_str,
+               sep2_idx = strstr ( result_str, " - " ) - result_str;
+
+        if ( sep2_idx <= 0 )
+                return; /* poorly formatted entry; skip */
+
+        result_str [ sep2_idx ] = '\0';
+
+        if ( sep1_idx > 0 && sep1_idx < sep2_idx ) {
+                /* The entry contains a package/category name. Print the
+                 * category and package name in COLOUR_PACKAGE, and then switch
+                 * back to the default colour for the USE-flag. Only
+                 * category-package entries prefix flags with a colon. */
+                fputs ( COLOUR_PACKAGE, stdout );
+                result_str [ sep1_idx ] = '\0';
+                fputs ( result_str, stdout );
+                fputs ( COLOUR_DEFAULT ":" COLOUR_USEFLAG, stdout );
+                fputs ( & ( result_str [ sep1_idx + 1 ] ), stdout );
+        } else {
+                /* The entry describes a global USE-flag. */
+                fputs ( COLOUR_USEFLAG, stdout );
+                fputs ( result_str, stdout );
+        }
+
+        fputs ( COLOUR_DEFAULT, stdout );
+        result_str [ sep2_idx ] = ' ';
+        fputs ( & ( result_str [ sep2_idx ] ), stdout );
+}
+
 /* print_search_result: print a search result, `result_str`, from the repo
  * `repo`, to stdout, respecting the ARG_PRINT_REPO_PATHS and
  * ARG_PRINT_REPO_NAMES command-line arguments. If `truncated` is set (the
@@ -788,7 +841,7 @@ static int print_seamless_buffer ( struct buffer_info_t * bi )
  * fails for any reason, " [...]" is printed to indicate a truncation. See
  * `print_seamless_buffer` for more information. */
 
-static void print_search_result ( const char * result_str,
+static void print_search_result ( char * result_str,
                 struct repo_t * repo, int truncated, char * needle,
                 struct buffer_info_t * bi )
 {
@@ -803,7 +856,10 @@ static void print_search_result ( const char * result_str,
         else if ( CHK_ARG ( options, ARG_PRINT_REPO_NAMES ) != 0 )
                 printf ( "%s::", repo->name );
 
-        fputs ( result_str, stdout );
+        if ( CHK_ARG ( options, ARG_COLOUR_OUTPUT ) != 0 )
+                print_coloured_result ( result_str );
+        else
+                fputs ( result_str, stdout );
 
         if ( !truncated || ( truncated && print_seamless_buffer ( bi ) == 0 ) )
                 /* If a warning has been issued by `print_warning`, there is no

@@ -128,7 +128,8 @@ void print_help_info ( const char * invocation )
                         "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
                         "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
                         "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
-                        "--%-13s -%-3c\t%s\n", invocation,
+                        "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n",
+                        invocation,
 
                         "list-repos", 'r', "Prepend a list of located " \
                                 "repositories (repos.conf/ only).",
@@ -151,6 +152,8 @@ void print_help_info ( const char * invocation )
                                 "search results with warnings.",
                         "package", 'k', "Restrict the search to category-" \
                                 "package description files.",
+                        "colour", 'o', "Print the package, flag, and" \
+                                " description in distinct colours.",
                         "", '\b', "Consider all further arguments as " \
                                 "substrings/queries." );
 }

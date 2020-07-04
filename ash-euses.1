@@ -90,6 +90,11 @@ Restrict the search to category-package files, excluding description files of
 global USE-flags. In practice, this only includes files containing
 .BR *.local " in the search."
 .TP
+.BR "\-\-colour", " \-o"
+Prettify the output on A.N.S.I.-compliant terminals. To change the colours,
+.RB "define the " COLOUR_PACKAGE " and " COLOUR_USEFLAG " compile-time"
+constants for the package and flag names respectively.
+.TP
 .BR \-\-
 .RB "If " \-\- " is passed on the command-line, all further arguments are"
 considered as substrings.

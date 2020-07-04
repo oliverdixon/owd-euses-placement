@@ -1,14 +1,5 @@
 The always-changing TODO list for ash-euses.
 --------------------------------------------
 
-Include coloured output (?);
-
-Investigate the alternatives to strstr(3), preferring performance. Perhaps the
-Boyer-Moore algorithm could be of assistance; some other major file-searchers
-have implemented it over glibc's strstr (ag-silversearcher) ?
-
-Address the many TODOs in the code, e.g.\ eradicate usage of d_type to boost
-portability to almost any UNIX-like system. I would also like to remove the
-reliance on strcasestr for case-insensitive search (ARG_SEARCH_NO_CASE), however
-I can't rewrite one myself that can touch it w.r.t.\ performance.
+Continue working on the str(case)str reimplementation. See the `strstr` branch.
 
