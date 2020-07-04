@@ -862,8 +862,11 @@ static void search_buffer ( char buffer [ LBUF_SZ ], char ** needles,
         for ( int i = 0; i < ncount; i++ ) {
                 buffer = buffer_start;
 
-                if ( ( bare_query = construct_query ( query, needles [ i ] ) )
-                                == -1 )
+                if ( needles [ i ] [ 0 ] == '\0' ||
+                                ( bare_query = construct_query ( query,
+                                                needles [ i ] ) ) == -1 )
+                        /* Ignore entries consisting of erroneous or empty
+                         * needles. */
                         continue;
 
                 do {
