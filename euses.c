@@ -60,7 +60,8 @@ enum warning_t {
         WARNING_QNONE = -3, /* no queries; nothing to do */
         WARNING_NONWL = -4, /* no newline found in the small buffer */
         WARNING_PDEXT = -5, /* PORTDIR was detected */
-        WARNING_PDLST = -6  /* ARG_LIST_REPOS was set with PORTDIR */
+        WARNING_PDLST = -6, /* ARG_LIST_REPOS was set with PORTDIR */
+        WARNING_NOEOF = -7  /* a file was improperly/abruptly terminated */
 };
 
 enum dir_status_t {
@@ -145,6 +146,7 @@ static const char * provide_gen_warning ( int status )
                 case WARNING_PDLST: return "Disregarding the repository-" \
                                         "listing request due to the presence" \
                                         " of PORTDIR.";
+                case WARNING_NOEOF: return "The file was rudely terminated.";
 
                 default: return "Unknown warning.";
         }
@@ -707,17 +709,16 @@ static int populate_glob ( char repo_base [ NAME_MAX + 1 ], glob_t * glob_buf )
  * appropriate warning is returned; WARNING_OK being returned on success. */
 
 static enum warning_t process_seamless_buffer ( struct buffer_info_t * bi,
-                char buffer [ SBUF_SZ ], long * pos ) 
+                char buffer [ SBUF_SZ ], long * pos )
 {
         ptrdiff_t newline_idx = 0;
         char * newline_pos = strchr ( buffer, '\n' );
 
-        if ( newline_pos == NULL ) {
-                /* No newline found; The warning for a failed fseek takes
+        if ( newline_pos == NULL )
+                /* No newline found. The warning for a failed fseek takes
                  * precedence over the absence of a newline. */
                 return ( fseek ( bi->fp, *pos, SEEK_SET ) == -1 ) ?
                         WARNING_ERRNO : WARNING_NONWL;
-        }
 
         *pos += ( newline_idx = newline_pos - buffer );
 
@@ -737,12 +738,11 @@ static enum warning_t process_seamless_buffer ( struct buffer_info_t * bi,
  * the end of the line, should that line appear in a subsequent buffer. This
  * function places the file cursor of `bi->fp` to the point after the newline,
  * to avoid double-searching. If, for any reason, the next line cannot be read
- * and parsed, " [...]" is assumed. The appropriate contents are placed in
- * `buffer`.
- *
- * This function returns -1 if a warning has been issued, and zero if not. */
+ * and parsed, a non-OK warning code is returned, and the information buffer is
+ * populated accordingly. On success, the appropriate contents are placed in
+ * `buffer` and WARNING_OK is returned. */
 
-static int get_seamless_buffer ( char buffer [ SBUF_SZ ],
+static enum warning_t get_seamless_buffer ( char buffer [ SBUF_SZ ],
                 struct buffer_info_t * bi ) 
 {
         enum warning_t warn_status = WARNING_OK;
@@ -756,31 +756,30 @@ static int get_seamless_buffer ( char buffer [ SBUF_SZ ],
          * remainder of the buffer, the position should be incremented to the
          * immediate character after the located newline, as a double-match in a
          * line would lead to the same line being printed twice. */
-        if ( ( pos = ftell ( bi->fp ) ) == -1 ) {
-                puts ( " [...]" );
-                if ( CHK_ARG ( options, ARG_NO_MIDBUF_WARN ) == 0 ) {
-                        populate_info_buffer ( bi->path );
-                        print_warning ( WARNING_ERRNO, &provide_gen_warning );
-                }
 
-                return -1;
+        if ( bi->fp == NULL ) {
+                /* This case should not be silently skipped, as the truncation
+                 * flag was a false-positive (the bufferer closed the file due
+                 * to hitting the end, but the file wasn't properly EOF-
+                 * terminated). */
+                populate_info_buffer ( bi->path );
+                return WARNING_NOEOF;
         }
 
-        /* Failure of this function is trivial: print " [...]" as a fallback. */
+        if ( ( pos = ftell ( bi->fp ) ) == -1 ) {
+                populate_info_buffer ( bi->path );
+                return WARNING_ERRNO;
+        }
+
         fread ( buffer, sizeof ( char ), SBUF_SZ - 1, bi->fp );
 
         if ( ( warn_status = process_seamless_buffer ( bi, buffer, &pos ) )
                         != WARNING_OK ) {
-                puts ( " [...]" );
-                if ( CHK_ARG ( options, ARG_NO_MIDBUF_WARN ) == 0 ) {
-                        populate_info_buffer ( bi->path );
-                        print_warning ( warn_status, &provide_gen_warning );
-                }
-
-                return -1;
+                populate_info_buffer ( bi->path );
+                return warn_status;
         }
 
-        return 0;
+        return WARNING_OK;
 }
 
 /* print_uncoloured_output: print the `result_str` uncoloured to stdout. If the
@@ -802,14 +801,45 @@ static void print_uncoloured_output ( char * result_str,
         fputs ( result_str, stdout );
 
         char extra_buffer [ SBUF_SZ ];
+        enum warning_t warn_status = WARNING_OK;
+        extra_buffer [ 0 ] = '\0';
+
+        if ( ( warn_status = get_seamless_buffer ( extra_buffer, bi ) )
+                        == WARNING_OK )
+                /* If a warning has been issued by `print_warning`, there is no
+                 * need to add an additional newline. */
+                puts ( extra_buffer );
+        else {
+                puts ( " [...]" );
+                if ( CHK_ARG ( options, ARG_NO_MIDBUF_WARN ) == 0 )
+                        print_warning ( warn_status, &provide_gen_warning );
+        }
+}
+
+/* print_coloured_transbuffer_result [TODO]: print a match in colour from a
+ * truncated buffer. */
+
+static void print_coloured_transbuffer_result ( char * result_str,
+                struct buffer_info_t * bi, ptrdiff_t sep1_idx,
+                ptrdiff_t sep2_idx )
+{
+        char extra_buffer [ SBUF_SZ ];
         extra_buffer [ 0 ] = '\0';
 
         if ( get_seamless_buffer ( extra_buffer, bi ) == -1 )
-                /* If a warning has been issued by `print_warning`, there is no
-                 * need to add an additional newline. */
-                putchar ( '\n' );
-        else
-                puts ( extra_buffer );
+                return;
+
+        /* If either of the indexes present with values suggesting an
+         * unaddressable location, they do not exist in the primary buffer, but
+         * may exist in the secondary. Thus, check there. The secondary buffer
+         * is always NULL-terminated, so a return value of NULL definitively
+         * states that the delimiter does not exist on the line. */
+
+        if ( sep1_idx >= BUFFER_SZ )
+                sep1_idx = strchr ( result_str, ':' ) - result_str;
+
+        if ( sep2_idx >= BUFFER_SZ )
+                sep2_idx = strstr ( result_str, " - " ) - result_str;
 }
 
 /* print_coloured_result: print `result_str` to stdout using the
@@ -831,6 +861,9 @@ static void print_coloured_result ( char * result_str,
                 /* TODO BUG-FIX: `strstr` and `strchr` might segfault if the
                  * buffer is truncated. Find a way of correctly printing
                  * coloured output across buffers. */
+                /* print_coloured_transbuffer_result ( result_str, bi, sep1_idx,
+                                sep2_idx ); */
+
                 print_uncoloured_output ( result_str, bi );
                 return;
         }
