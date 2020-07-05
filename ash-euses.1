@@ -159,6 +159,17 @@ substring, appending the name of the relevant repository to each result.
 .B PORTAGE_CONFIGROOT=/mnt/gentoo ash-euses -r
 .RB "Using the " /mnt/gentoo/etc/portage " configuration directory, list all"
 .RB "repositories described in the " repos.conf " directory."
+.SH QUIRKS
+If a query crosses two buffers, then the searcher may miss it. This is an
+extremely rare edge-case, and it is also impossible to fix, as it is not
+possible for the program to determine the most important characters of the
+query. Thus, if the program misses out a result on an extremely specific query,
+the query could be shortened so that prospective results do not cross internal
+buffers. This is a problem with almost every file-searching program. A crude
+work-around for most cases is to increase the size of the buffer, which can be
+done by a compiler by redefining
+.BR LBUF_SZ ", however this will inevitably increase the footprint of the"
+execution.
 .SH SEE ALSO
 .BR "euses" "(1), " "emerge" "(1), " "make.conf" "(5), " "portage" "(5), "
 .BR "ebuild" "(1), " glob (3)

@@ -21,8 +21,13 @@
 
 #define QUERY_MAX ( 256  )
 #define BUFFER_SZ ( 4096 )
-#define LBUF_SZ   ( 8192 )
 #define SBUF_SZ   ( 256  )
+
+#ifndef LBUF_SZ
+/* A user/distributor may want to change this. For an explanation of the
+ * potential reasoning behind this, see the QUIRKS section of the manual. */
+#define LBUF_SZ   ( 8192 )
+#endif
 
 #define ASCII_MIN ( 0x20 )
 #define ASCII_MAX ( 0x7E )
@@ -797,12 +802,10 @@ static void print_uncoloured_output ( char * result_str,
         /* The buffer has been truncated. Declaring variables here is rather
          * poor practice, however needlessly expanding the stack by SBUF_SZ for
          * 99% of matches would also be poor practice. */
-
-        fputs ( result_str, stdout );
-
         char extra_buffer [ SBUF_SZ ];
         enum warning_t warn_status = WARNING_OK;
-        extra_buffer [ 0 ] = '\0';
+
+        fputs ( result_str, stdout );
 
         if ( ( warn_status = get_seamless_buffer ( extra_buffer, bi ) )
                         == WARNING_OK )
@@ -816,30 +819,103 @@ static void print_uncoloured_output ( char * result_str,
         }
 }
 
-/* print_coloured_transbuffer_result [TODO]: print a match in colour from a
- * truncated buffer. */
+/* correct_transbuffer_indexes: if the previous indexes of colour-changing
+ * delimiters are infeasible, this function searches for them in the read-ahead
+ * buffer, `buffer`, and sets the indexes and their respective corresponding
+ * buffers. If the entry is poorly formatted, -1 is returned; zero is returned
+ * on success. */
 
-static void print_coloured_transbuffer_result ( char * result_str,
-                struct buffer_info_t * bi, ptrdiff_t sep1_idx,
-                ptrdiff_t sep2_idx )
+static int correct_transbuffer_indexes ( const char * buffer,
+                ptrdiff_t * sep1_idx, ptrdiff_t * sep2_idx, char ** idx1_buf,
+                char ** idx2_buf )
 {
-        char extra_buffer [ SBUF_SZ ];
-        extra_buffer [ 0 ] = '\0';
-
-        if ( get_seamless_buffer ( extra_buffer, bi ) == -1 )
-                return;
-
         /* If either of the indexes present with values suggesting an
          * unaddressable location, they do not exist in the primary buffer, but
          * may exist in the secondary. Thus, check there. The secondary buffer
          * is always NULL-terminated, so a return value of NULL definitively
          * states that the delimiter does not exist on the line. */
 
-        if ( sep1_idx >= BUFFER_SZ )
-                sep1_idx = strchr ( result_str, ':' ) - result_str;
+        if ( *sep1_idx <= 0 || *sep1_idx >= BUFFER_SZ ) {
+                *sep1_idx = strchr ( buffer, ':' ) - buffer;
+                *idx1_buf = ( char * ) buffer;
+        }
 
-        if ( sep2_idx >= BUFFER_SZ )
-                sep2_idx = strstr ( result_str, " - " ) - result_str;
+        if ( *sep2_idx <= 0 || *sep2_idx >= BUFFER_SZ ) {
+                *sep2_idx = strstr ( buffer, " - " ) - buffer;
+                *idx2_buf = ( char * ) buffer;
+        }
+
+        return ( *sep2_idx <= 0 ) ? -1 : 0; /* poorly formatted entry ? */
+}
+
+/* print_coloured_block: properly format and print a coloured block, which could
+ * be transbuffer, according to the defined sequences in "colour.h". This
+ * function assumes that the `sep{1,2}_idx` indexes have been properly
+ * normalised, and will not lead to segfaults when being used to index into
+ * their respective buffers. */
+
+static void print_coloured_block ( char * primary_buffer, char * idx1_buf,
+                ptrdiff_t sep1_idx, char * idx2_buf, ptrdiff_t sep2_idx )
+{
+        idx2_buf [ sep2_idx ] = '\0';
+
+        if ( sep1_idx > 0 ) {
+                /* category-package */
+                fputs ( HIGHLIGHT_PACKAGE, stdout );
+                if ( idx1_buf != primary_buffer )
+                        fputs ( primary_buffer, stdout );
+                idx1_buf [ sep1_idx ] = '\0';
+                fputs ( idx1_buf, stdout );
+                fputs ( HIGHLIGHT_STD ":" HIGHLIGHT_USEFLAG, stdout );
+                fputs ( & ( idx1_buf [ sep1_idx + 1 ] ), stdout );
+        } else {
+                /* global USE-flag */
+                fputs ( HIGHLIGHT_USEFLAG, stdout );
+                fputs ( idx1_buf, stdout );
+        }
+
+        fputs ( HIGHLIGHT_STD, stdout );
+        idx2_buf [ sep2_idx ] = ' ';
+        fputs ( & ( idx2_buf [ sep2_idx ] ), stdout );
+}
+
+/* print_coloured_transbuffer_result: print a match in colour from a truncated
+ * buffer. This function rectifies nonsensical indexes, by normalising them to
+ * the secondary read-ahead buffer (c.f. `correct_transbuffer_indexes`). */
+
+static void print_coloured_transbuffer_result ( char * result_str,
+                struct buffer_info_t * bi, ptrdiff_t sep1_idx,
+                ptrdiff_t sep2_idx )
+{
+        enum warning_t warn_status = WARNING_OK;
+        char extra_buffer [ SBUF_SZ ], * idx1_buf = result_str,
+             * idx2_buf = result_str;
+
+        if ( ( warn_status = get_seamless_buffer ( extra_buffer, bi ) )
+                        != WARNING_OK ) {
+                /* If the seamless buffer cannot be retrieved for some reason,
+                 * just print the match from the primary buffer without
+                 * colouring. */
+                fputs ( result_str, stdout );
+                puts ( " [...]" );
+                if ( CHK_ARG ( options, ARG_NO_MIDBUF_WARN ) == 0 )
+                        print_warning ( warn_status, &provide_gen_warning );
+
+                return;
+        }
+
+        if ( correct_transbuffer_indexes ( extra_buffer, &sep1_idx, &sep2_idx,
+                                &idx1_buf, &idx2_buf ) == -1 )
+                return;
+
+        print_coloured_block ( result_str, idx1_buf, sep1_idx, idx2_buf,
+                        sep2_idx );
+
+        if ( idx1_buf == result_str && idx2_buf == result_str )
+                /* finish printing the description */
+                puts ( extra_buffer );
+        else
+                putchar ( '\n' );
 }
 
 /* print_coloured_result: print `result_str` to stdout using the
@@ -858,40 +934,18 @@ static void print_coloured_result ( char * result_str,
                   sep2_idx = strstr ( result_str, " - " ) - result_str;
 
         if ( bi->truncated ) {
-                /* TODO BUG-FIX: `strstr` and `strchr` might segfault if the
-                 * buffer is truncated. Find a way of correctly printing
-                 * coloured output across buffers. */
-                /* print_coloured_transbuffer_result ( result_str, bi, sep1_idx,
-                                sep2_idx ); */
-
-                print_uncoloured_output ( result_str, bi );
+                print_coloured_transbuffer_result ( result_str, bi, sep1_idx,
+                                sep2_idx );
                 return;
         }
 
         if ( sep2_idx <= 0 )
                 return; /* poorly formatted entry; skip */
 
-        result_str [ sep2_idx ] = '\0';
-
-        if ( sep1_idx > 0 && sep1_idx < sep2_idx ) {
-                /* The entry contains a package/category name. Print the
-                 * category and package name in HIGHLIGHT_PACKAGE, and then
-                 * switch to HIGHLIGHT_USEFLAG for the USE-flag. Only
-                 * category-package entries prefix flags with a colon. */
-                fputs ( HIGHLIGHT_PACKAGE, stdout );
-                result_str [ sep1_idx ] = '\0';
-                fputs ( result_str, stdout );
-                fputs ( HIGHLIGHT_STD ":" HIGHLIGHT_USEFLAG, stdout );
-                fputs ( & ( result_str [ sep1_idx + 1 ] ), stdout );
-        } else {
-                /* The entry describes a global USE-flag. */
-                fputs ( HIGHLIGHT_USEFLAG, stdout );
-                fputs ( result_str, stdout );
-        }
-
-        fputs ( HIGHLIGHT_STD, stdout );
-        result_str [ sep2_idx ] = ' ';
-        puts ( & ( result_str [ sep2_idx ] ) );
+        /* In single-buffer mode, both indexes regard the primary buffer. */
+        print_coloured_block ( result_str, result_str, sep1_idx, result_str,
+                        sep2_idx );
+        putchar ( '\n' );
 }
 
 /* print_search_result: print a search result, `result_str`, from the repo
