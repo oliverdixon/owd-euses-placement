@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <dirent.h>
 #include <glob.h>
+#include <stddef.h> /* ptrdiff_t */
 
 #include "euses.h"
 #include "args.h"
@@ -507,7 +508,7 @@ static int feof_stream ( FILE * fp )
         if ( fseek ( fp, pos, SEEK_SET ) == -1 )
                 return -1;
 
-        /* Due to the behaviour of `print_seamless_buffer`, `pos` may exceed
+        /* Due to the behaviour of `get_seamless_buffer`, `pos` may exceed
          * `len`, but still be valid (and indicate end-of-file). */
         return ( pos >= len );
 }
@@ -706,12 +707,10 @@ static int populate_glob ( char repo_base [ NAME_MAX + 1 ], glob_t * glob_buf )
  * appropriate warning is returned; WARNING_OK being returned on success. */
 
 static enum warning_t process_seamless_buffer ( struct buffer_info_t * bi,
-                char buffer [ SBUF_SZ ], long * pos )
+                char buffer [ SBUF_SZ ], long * pos ) 
 {
+        ptrdiff_t newline_idx = 0;
         char * newline_pos = strchr ( buffer, '\n' );
-        unsigned int newline_diff = 0;
-
-        *pos += ( newline_diff = newline_pos - buffer );
 
         if ( newline_pos == NULL ) {
                 /* No newline found; The warning for a failed fseek takes
@@ -720,30 +719,32 @@ static enum warning_t process_seamless_buffer ( struct buffer_info_t * bi,
                         WARNING_ERRNO : WARNING_NONWL;
         }
 
+        *pos += ( newline_idx = newline_pos - buffer );
+
         if ( errno != 0 || fseek ( bi->fp, *pos, SEEK_SET ) == -1 )
                 /* an error occurred with the buffer-collation or the
                  * position-reversal (fseek to `pos`). */
                 return WARNING_ERRNO;
 
-        buffer [ newline_diff ] = '\0';
-        fputs ( buffer, stdout );
-        buffer [ newline_diff ] = '\n';
-
+        /* This buffer is temporary; it will be thrown away by the caller. Thus,
+         * adding this arbitrary NULL-terminator is perfectly safe. */
+        buffer [ newline_idx ] = '\0';
         return WARNING_OK;
 }
 
-/* print_seamless_buffer: give the illusion of a seamless buffer, by allocating
- * a relatively small buffer (SBUF_SZ) to accommodate from the current position
- * to the end of the line, should that line appear in a subsequent buffer. This
+/* get_seamless_buffer: give the illusion of a seamless buffer, by allocating a
+ * relatively small buffer (SBUF_SZ) to accommodate from the current position to
+ * the end of the line, should that line appear in a subsequent buffer. This
  * function places the file cursor of `bi->fp` to the point after the newline,
  * to avoid double-searching. If, for any reason, the next line cannot be read
- * and parsed, " [...]" is printed.
+ * and parsed, " [...]" is assumed. The appropriate contents are placed in
+ * `buffer`.
  *
  * This function returns -1 if a warning has been issued, and zero if not. */
 
-static int print_seamless_buffer ( struct buffer_info_t * bi )
+static int get_seamless_buffer ( char buffer [ SBUF_SZ ],
+                struct buffer_info_t * bi ) 
 {
-        char buffer [ SBUF_SZ ];
         enum warning_t warn_status = WARNING_OK;
         long pos = 0;
 
@@ -783,19 +784,32 @@ static int print_seamless_buffer ( struct buffer_info_t * bi )
 }
 
 /* print_uncoloured_output: print the `result_str` uncoloured to stdout. If the
- * buffer has been truncated, `print_seamless_buffer` is used to pick up the
- * rest of the line. */
+ * buffer has been truncated, `get_seamless_buffer` is used to pick up the rest
+ * of the line. */
 
 static void print_uncoloured_output ( char * result_str,
                 struct buffer_info_t * bi )
 {
+        if ( ! ( bi->truncated ) ) {
+                puts ( result_str );
+                return;
+        }
+
+        /* The buffer has been truncated. Declaring variables here is rather
+         * poor practice, however needlessly expanding the stack by SBUF_SZ for
+         * 99% of matches would also be poor practice. */
+
         fputs ( result_str, stdout );
 
-        if ( ! ( bi->truncated ) || ( bi->truncated &&
-                                print_seamless_buffer ( bi ) == 0 ) )
+        char extra_buffer [ SBUF_SZ ];
+        extra_buffer [ 0 ] = '\0';
+
+        if ( get_seamless_buffer ( extra_buffer, bi ) == -1 )
                 /* If a warning has been issued by `print_warning`, there is no
                  * need to add an additional newline. */
                 putchar ( '\n' );
+        else
+                puts ( extra_buffer );
 }
 
 /* print_coloured_result: print `result_str` to stdout using the
@@ -806,7 +820,12 @@ static void print_uncoloured_output ( char * result_str,
 static void print_coloured_result ( char * result_str,
                 struct buffer_info_t * bi )
 {
-        size_t sep1_idx = 0, sep2_idx = 0;
+        /* strstr, on most libc implementations, is extremely fast for short
+         * needles (around three or four characters). Only when the needle
+         * exceeds 256 characters is the standard two-way algorithm used, and
+         * even that uses a shift table. */
+        ptrdiff_t sep1_idx = strchr ( result_str, ':' ) - result_str,
+                  sep2_idx = strstr ( result_str, " - " ) - result_str;
 
         if ( bi->truncated ) {
                 /* TODO BUG-FIX: `strstr` and `strchr` might segfault if the
@@ -815,13 +834,6 @@ static void print_coloured_result ( char * result_str,
                 print_uncoloured_output ( result_str, bi );
                 return;
         }
-
-        /* strstr, on most libc implementations, is extremely fast for short
-         * needles (around three or four characters). Only when the needle
-         * exceeds 256 characters is the standard two-way algorithm used, and
-         * even that uses a shift table. */
-        sep1_idx = strchr ( result_str, ':' ) - result_str;
-        sep2_idx = strstr ( result_str, " - " ) - result_str;
 
         if ( sep2_idx <= 0 )
                 return; /* poorly formatted entry; skip */
@@ -855,7 +867,7 @@ static void print_coloured_result ( char * result_str,
  * result continues in another buffer), a temporary SBUF_SZ buffer is allocated
  * on the stack to print the rest of the line (up until the next '\n'). If this
  * fails for any reason, " [...]" is printed to indicate a truncation. See
- * `print_seamless_buffer` for more information. */
+ * `get_seamless_buffer` for more information. */
 
 static void print_search_result ( char * result_str, struct repo_t * repo,
                 char * needle, struct buffer_info_t * bi )
