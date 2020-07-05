@@ -89,6 +89,7 @@ struct buffer_info_t {
         enum buffer_status_t status; /* for the caller: status of the reader */
         char * buffer; /* buffer pointer, assumed to be of size LBUF_SZ */
         char * path; /* path of `fp` */
+        int truncated; /* truncation status */
 };
 
 /* provide_gen_error: returns a human-readable string representing an error
@@ -755,7 +756,7 @@ static int print_seamless_buffer ( struct buffer_info_t * bi )
          * immediate character after the located newline, as a double-match in a
          * line would lead to the same line being printed twice. */
         if ( ( pos = ftell ( bi->fp ) ) == -1 ) {
-                fputs ( " [...]\n", stdout );
+                puts ( " [...]" );
                 if ( CHK_ARG ( options, ARG_NO_MIDBUF_WARN ) == 0 ) {
                         populate_info_buffer ( bi->path );
                         print_warning ( WARNING_ERRNO, &provide_gen_warning );
@@ -769,7 +770,7 @@ static int print_seamless_buffer ( struct buffer_info_t * bi )
 
         if ( ( warn_status = process_seamless_buffer ( bi, buffer, &pos ) )
                         != WARNING_OK ) {
-                fputs ( " [...]\n", stdout );
+                puts ( " [...]" );
                 if ( CHK_ARG ( options, ARG_NO_MIDBUF_WARN ) == 0 ) {
                         populate_info_buffer ( bi->path );
                         print_warning ( warn_status, &provide_gen_warning );
@@ -781,19 +782,46 @@ static int print_seamless_buffer ( struct buffer_info_t * bi )
         return 0;
 }
 
+/* print_uncoloured_output: print the `result_str` uncoloured to stdout. If the
+ * buffer has been truncated, `print_seamless_buffer` is used to pick up the
+ * rest of the line. */
+
+static void print_uncoloured_output ( char * result_str,
+                struct buffer_info_t * bi )
+{
+        fputs ( result_str, stdout );
+
+        if ( ! ( bi->truncated ) || ( bi->truncated &&
+                                print_seamless_buffer ( bi ) == 0 ) )
+                /* If a warning has been issued by `print_warning`, there is no
+                 * need to add an additional newline. */
+                putchar ( '\n' );
+}
+
 /* print_coloured_result: print `result_str` to stdout using the
  * HIGHLIGHT_PACKAGE and HIGHLIGHT_USEFLAG colours, with the flag description
  * being printed in HIGHLIGHT_STD. If an entry is poorly formatted, it is
  * silently skipped. */
 
-static void print_coloured_result ( char * result_str )
+static void print_coloured_result ( char * result_str,
+                struct buffer_info_t * bi )
 {
+        size_t sep1_idx = 0, sep2_idx = 0;
+
+        if ( bi->truncated ) {
+                /* TODO BUG-FIX: `strstr` and `strchr` might segfault if the
+                 * buffer is truncated. Find a way of correctly printing
+                 * coloured output across buffers. */
+                print_uncoloured_output ( result_str, bi );
+                return;
+        }
+
         /* strstr, on most libc implementations, is extremely fast for short
          * needles (around three or four characters). Only when the needle
          * exceeds 256 characters is the standard two-way algorithm used, and
          * even that uses a shift table. */
-        size_t sep1_idx = strchr ( result_str, ':' ) - result_str,
-               sep2_idx = strstr ( result_str, " - " ) - result_str;
+        sep1_idx = strchr ( result_str, ':' ) - result_str;
+        sep2_idx = strstr ( result_str, " - " ) - result_str;
 
         if ( sep2_idx <= 0 )
                 return; /* poorly formatted entry; skip */
@@ -818,20 +846,19 @@ static void print_coloured_result ( char * result_str )
 
         fputs ( HIGHLIGHT_STD, stdout );
         result_str [ sep2_idx ] = ' ';
-        fputs ( & ( result_str [ sep2_idx ] ), stdout );
+        puts ( & ( result_str [ sep2_idx ] ) );
 }
 
 /* print_search_result: print a search result, `result_str`, from the repo
  * `repo`, to stdout, respecting the ARG_PRINT_REPO_PATHS and
- * ARG_PRINT_REPO_NAMES command-line arguments. If `truncated` is set (the
+ * ARG_PRINT_REPO_NAMES command-line arguments. If `bi->truncated` is set (the
  * result continues in another buffer), a temporary SBUF_SZ buffer is allocated
  * on the stack to print the rest of the line (up until the next '\n'). If this
  * fails for any reason, " [...]" is printed to indicate a truncation. See
  * `print_seamless_buffer` for more information. */
 
-static void print_search_result ( char * result_str,
-                struct repo_t * repo, int truncated, char * needle,
-                struct buffer_info_t * bi )
+static void print_search_result ( char * result_str, struct repo_t * repo,
+                char * needle, struct buffer_info_t * bi )
 {
         if ( CHK_ARG ( options, ARG_PRINT_NEEDLE ) != 0 )
                 /* `needle` should probably be the original search string; not
@@ -845,14 +872,9 @@ static void print_search_result ( char * result_str,
                 printf ( "%s::", repo->name );
 
         if ( CHK_ARG ( options, ARG_COLOUR_OUTPUT ) != 0 )
-                print_coloured_result ( result_str );
+                print_coloured_result ( result_str, bi );
         else
-                fputs ( result_str, stdout );
-
-        if ( !truncated || ( truncated && print_seamless_buffer ( bi ) == 0 ) )
-                /* If a warning has been issued by `print_warning`, there is no
-                 * need to add an additional newline. */
-                putchar ( '\n' );
+                print_uncoloured_output ( result_str, bi );
 }
 
 /* construct_query: construct an appropriate query, taking `str`, applying the
@@ -922,8 +944,8 @@ static void search_buffer ( char buffer [ LBUF_SZ ], char ** needles,
                                                 == NULL )
                                         break;
 
-                                print_search_result ( ptr, repo, ( buffer ==
-                                                        NULL ), needles [ i ],
+                                bi->truncated = ( buffer == NULL );
+                                print_search_result ( ptr, repo, needles [ i ],
                                                 bi );
                                 if ( buffer == NULL )
                                         break; /* end of buffer; see `marker` */
