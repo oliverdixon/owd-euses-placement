@@ -19,15 +19,23 @@
 #include "stack.h"
 #include "colour.h"
 
-#define QUERY_MAX ( 256  )
-#define BUFFER_SZ ( 4096 )
-#define SBUF_SZ   ( 256  )
+#define QUERY_MAX   ( 256  )
+#define BUFFER_SZ   ( 4096 )
+#define SBUF_SZ     ( 256  )
+#define LBUF_SZ_MIN ( 128  )
 
 #ifndef LBUF_SZ
 /* A user/distributor may want to change this. For an explanation of the
  * potential reasoning behind this, see the QUIRKS section of the manual. */
 #define LBUF_SZ   ( 8192 )
-#endif
+#else
+#if LBUF_SZ < LBUF_SZ_MIN
+/* Anything lower than LBUF_SZ_MIN would cause the output to be about as
+ * readable as Finnegans Wake, as the previous (contextual) buffer information
+ * would be skipped. */
+#error "LBUF_SZ cannot be so minute."
+#endif /* LBUF_SZ < LBUF_SZ_MIN */
+#endif /* LBUF_SZ */
 
 #define ASCII_MIN ( 0x20 )
 #define ASCII_MAX ( 0x7E )
@@ -494,8 +502,8 @@ static enum status_t enumerate_repo_descriptions ( char base [ ],
 
 /* feof_stream: feof alternative, removing the reliance on file-handling
  * functions, such as fread, to set the end-of-file indicator. Unfortunately,
- * when reading a file of size 4096 into a buffer of identical capacity, fread
- * only flags EOF upon attempting to read the 4097th character; thus, feof
+ * when reading a file of size N into a buffer of identical capacity, fread
+ * only flags EOF upon attempting to read the (N+1)th character; thus, feof
  * cannot be relied upon. This function returns -1 on error, zero if the file
  * has not reached the end, and 1 if the inverse is true. In any case, the file
  * cursor is reverted to its previous state. */
