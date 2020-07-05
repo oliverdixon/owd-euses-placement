@@ -16,6 +16,7 @@
 #include "args.h"
 #include "converse.h"
 #include "stack.h"
+#include "colour.h"
 
 #define QUERY_MAX ( 256  )
 #define BUFFER_SZ ( 4096 )
@@ -30,20 +31,6 @@
 #define CONFIGROOT_DEFAULT "/etc/portage"
 #define PORTAGE_MAKECONF   "/../make.conf"
 #define DEFAULT_REPO_NAME  "gentoo"
-
-#ifndef COLOUR_DEFAULT
-#define COLOUR_DEFAULT "\033[0m"
-#endif
-
-#ifndef COLOUR_PACKAGE
-/* Colour for category-package names */
-#define COLOUR_PACKAGE "\033[0;31m"
-#endif
-
-#ifndef COLOUR_USEFLAG
-/* Colour for USE-flags */
-#define COLOUR_USEFLAG "\033[0;32m"
-#endif
 
 /* Globbin' patterns relative to the repository base locations. */
 #define GLOB_PATTERN_ROOT "/profiles/*.desc"
@@ -777,7 +764,7 @@ static int print_seamless_buffer ( struct buffer_info_t * bi )
                 return -1;
         }
 
-        /* Failure of this function is trivial; print " [...]" as a fallback. */
+        /* Failure of this function is trivial: print " [...]" as a fallback. */
         fread ( buffer, sizeof ( char ), SBUF_SZ - 1, bi->fp );
 
         if ( ( warn_status = process_seamless_buffer ( bi, buffer, &pos ) )
@@ -794,16 +781,17 @@ static int print_seamless_buffer ( struct buffer_info_t * bi )
         return 0;
 }
 
-/* print_coloured_result: print `result_str` to stdout using the COLOUR_PACKAGE
- * and COLOUR_USEFLAG colours, with the flag description being printed in
- * COLOUR_DEFAULT. If an entry is poorly formatted, it is silently skipped. */
+/* print_coloured_result: print `result_str` to stdout using the
+ * HIGHLIGHT_PACKAGE and HIGHLIGHT_USEFLAG colours, with the flag description
+ * being printed in HIGHLIGHT_STD. If an entry is poorly formatted, it is
+ * silently skipped. */
 
 static void print_coloured_result ( char * result_str )
 {
         /* strstr, on most libc implementations, is extremely fast for short
-         * needles (less than three characters). Only when the needle exceeds
-         * 256 characters is the standard two-way algorithm used, and even that
-         * uses a shift table. */
+         * needles (around three or four characters). Only when the needle
+         * exceeds 256 characters is the standard two-way algorithm used, and
+         * even that uses a shift table. */
         size_t sep1_idx = strchr ( result_str, ':' ) - result_str,
                sep2_idx = strstr ( result_str, " - " ) - result_str;
 
@@ -814,21 +802,21 @@ static void print_coloured_result ( char * result_str )
 
         if ( sep1_idx > 0 && sep1_idx < sep2_idx ) {
                 /* The entry contains a package/category name. Print the
-                 * category and package name in COLOUR_PACKAGE, and then switch
-                 * back to the default colour for the USE-flag. Only
+                 * category and package name in HIGHLIGHT_PACKAGE, and then
+                 * switch to HIGHLIGHT_USEFLAG for the USE-flag. Only
                  * category-package entries prefix flags with a colon. */
-                fputs ( COLOUR_PACKAGE, stdout );
+                fputs ( HIGHLIGHT_PACKAGE, stdout );
                 result_str [ sep1_idx ] = '\0';
                 fputs ( result_str, stdout );
-                fputs ( COLOUR_DEFAULT ":" COLOUR_USEFLAG, stdout );
+                fputs ( HIGHLIGHT_STD ":" HIGHLIGHT_USEFLAG, stdout );
                 fputs ( & ( result_str [ sep1_idx + 1 ] ), stdout );
         } else {
                 /* The entry describes a global USE-flag. */
-                fputs ( COLOUR_USEFLAG, stdout );
+                fputs ( HIGHLIGHT_USEFLAG, stdout );
                 fputs ( result_str, stdout );
         }
 
-        fputs ( COLOUR_DEFAULT, stdout );
+        fputs ( HIGHLIGHT_STD, stdout );
         result_str [ sep2_idx ] = ' ';
         fputs ( & ( result_str [ sep2_idx ] ), stdout );
 }

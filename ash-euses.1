@@ -92,8 +92,10 @@ global USE-flags. In practice, this only includes files containing
 .TP
 .BR "\-\-colour", " \-o"
 Prettify the output on A.N.S.I.-compliant terminals. To change the colours,
-.RB "define the " COLOUR_PACKAGE " and " COLOUR_USEFLAG " compile-time"
+.RB "define the " HIGHLIGHT_PACKAGE " and " HIGHLIGHT_USEFLAG " compile-time"
 constants for the package and flag names respectively.
+.BR HIGHLIGHT_STD " can also be defined to change the default colour of the"
+entire output.
 .TP
 .BR \-\-
 .RB "If " \-\- " is passed on the command-line, all further arguments are"
