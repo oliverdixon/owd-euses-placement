@@ -49,7 +49,8 @@ enum arg_positions_t {
         ARG_COLOUR_OUTPUT    = 4096  /* 13th bit */
 };
 
-typedef uint8_t opts_t;
+/* uintN_t, such that log2(<highest `arg_position_t`>) <= N */
+typedef uint16_t opts_t;
 
 extern opts_t  options;
 int process_args ( int, char **, int * );

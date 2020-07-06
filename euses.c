@@ -19,7 +19,6 @@
 #include "stack.h"
 #include "colour.h"
 
-#define QUERY_MAX   ( 256  )
 #define BUFFER_SZ   ( 4096 )
 #define SBUF_SZ     ( 256  )
 #define LBUF_SZ_MIN ( 128  )
@@ -27,7 +26,7 @@
 #ifndef LBUF_SZ
 /* A user/distributor may want to change this. For an explanation of the
  * potential reasoning behind this, see the QUIRKS section of the manual. */
-#define LBUF_SZ   ( 8192 )
+#define LBUF_SZ     ( 8192 )
 #else
 #if LBUF_SZ < LBUF_SZ_MIN
 /* Anything lower than LBUF_SZ_MIN would cause the output to be about as
@@ -68,13 +67,12 @@ enum status_t {
 enum warning_t {
         WARNING_ERRNO =  1, /* c.f. errno */
         WARNING_OK    =  0, /* everything is OK */
-        WARNING_QLONG = -1, /* a query exceeded QUERY_MAX - 1 */
-        WARNING_RNONE = -2, /* no repositories; nothing to do */
-        WARNING_QNONE = -3, /* no queries; nothing to do */
-        WARNING_NONWL = -4, /* no newline found in the small buffer */
-        WARNING_PDEXT = -5, /* PORTDIR was detected */
-        WARNING_PDLST = -6, /* ARG_LIST_REPOS was set with PORTDIR */
-        WARNING_NOEOF = -7  /* a file was improperly/abruptly terminated */
+        WARNING_RNONE = -1, /* no repositories; nothing to do */
+        WARNING_QNONE = -2, /* no queries; nothing to do */
+        WARNING_NONWL = -3, /* no newline found in the small buffer */
+        WARNING_PDEXT = -4, /* PORTDIR was detected */
+        WARNING_PDLST = -5, /* ARG_LIST_REPOS was set with PORTDIR */
+        WARNING_NOEOF = -6  /* a file was improperly/abruptly terminated */
 };
 
 enum dir_status_t {
@@ -142,7 +140,6 @@ static const char * provide_gen_warning ( int status )
 {
         switch ( status ) {
                 case WARNING_ERRNO: return strerror ( errno );
-                case WARNING_QLONG: return "The query is too long.";
                 case WARNING_RNONE: return "No repositories were found.";
                 case WARNING_QNONE: return "No queries were provided.";
                 case WARNING_NONWL: return "The entry did not end with a " \
@@ -926,6 +923,22 @@ static void print_coloured_transbuffer_result ( char * result_str,
                 putchar ( '\n' );
 }
 
+/* locate_field_delims: find the index of the two field-delimiters in `str`,
+ * placing the index of the package-flag separator and flag-description
+ * separator in `pkg_flag` and `flagdesc` respectively. */
+
+static inline void locate_field_delims ( char * str, ptrdiff_t * pkgflag,
+                ptrdiff_t * flagdesc )
+{
+        *pkgflag = strchr ( str, ':' ) - str;
+        *flagdesc = strstr ( str, " - " ) - str;
+
+        /* strstr, on most libc implementations, is extremely fast for short
+         * needles (around three or four characters). Only when the needle
+         * exceeds 256 characters is the standard two-way algorithm used, and
+         * even that uses a shift table. */
+}
+
 /* print_coloured_result: print `result_str` to stdout using the
  * HIGHLIGHT_PACKAGE and HIGHLIGHT_USEFLAG colours, with the flag description
  * being printed in HIGHLIGHT_STD. If an entry is poorly formatted, it is
@@ -934,12 +947,8 @@ static void print_coloured_transbuffer_result ( char * result_str,
 static void print_coloured_result ( char * result_str,
                 struct buffer_info_t * bi )
 {
-        /* strstr, on most libc implementations, is extremely fast for short
-         * needles (around three or four characters). Only when the needle
-         * exceeds 256 characters is the standard two-way algorithm used, and
-         * even that uses a shift table. */
-        ptrdiff_t sep1_idx = strchr ( result_str, ':' ) - result_str,
-                  sep2_idx = strstr ( result_str, " - " ) - result_str;
+        ptrdiff_t sep1_idx = -1, sep2_idx = -1;
+        locate_field_delims ( result_str, &sep1_idx, &sep2_idx );
 
         if ( bi->truncated ) {
                 print_coloured_transbuffer_result ( result_str, bi, sep1_idx,
@@ -984,37 +993,16 @@ static void print_search_result ( char * result_str, struct repo_t * repo,
                 print_uncoloured_output ( result_str, bi );
 }
 
-/* construct_query: construct an appropriate query, taking `str`, applying the
- * correct filters according to the command-line arguments, and copying an
- * appropriate substring into `query`. The return value of this function should
- * never invoke a fatal error; the query should just be skipped. */
+/* verify_strict_compliance: assuming `ARG_SEARCH_STRICT` is set, this function
+ * determines whether `mt_start` begins in the flag field, returning zero if it
+ * does, and -1 otherwise. */
 
-static int construct_query ( char query [ QUERY_MAX ], const char * str )
+static inline int verify_strict_compliance ( char * ln_start, char * mt_start )
 {
-        int modified = 0;
-        size_t len = 0;
+        ptrdiff_t pkgflag = -1, flagdesc = -1, idx = mt_start - ln_start;
 
-        if ( CHK_ARG ( options, ARG_SEARCH_STRICT ) != 0 ) {
-                /* strlen ( str ) + 3 >= QUERY_MAX - 1
-                 * ==> strlen ( str ) >= QUERY_MAX - 4 */
-                if ( ( len = strlen ( str ) ) >= QUERY_MAX - 4 ) {
-                        populate_info_buffer ( str );
-                        print_warning ( WARNING_QLONG, &provide_gen_warning );
-                        return -1;
-                }
-
-                strcpy ( query, str );
-                query [ len ] = ' ';
-                query [ len + 1 ] = '-';
-                query [ len + 2 ] = ' ';
-                query [ len + 3 ] = '\0';
-                modified = 1;
-        }
-
-        /* If the query has not been modified according to external factors
-         * (such as command-line arguments), the caller must use the original
-         * `str` as the needle. */
-        return ( !modified );
+        locate_field_delims ( ln_start, &pkgflag, &flagdesc );
+        return ( ( pkgflag <= 0 || idx > pkgflag ) && idx < flagdesc ) ? 0 : -1;
 }
 
 /* search_buffer: search the `buffer` for the provided `needles`, of which there
@@ -1026,8 +1014,8 @@ static int construct_query ( char query [ QUERY_MAX ], const char * str )
 static void search_buffer ( char buffer [ LBUF_SZ ], char ** needles,
                 int ncount, struct repo_t * repo, struct buffer_info_t * bi )
 {
-        int bare_query = 1;
-        char * ptr = NULL, query [ QUERY_MAX ], * buffer_start = buffer,
+        /* ln_start: start of the matching line; mt_start: start of the match */
+        char * ln_start = NULL, * buffer_start = buffer, * mt_start = NULL,
                 * ( * searcher ) ( const char *, const char * ) =
                         ( CHK_ARG ( options, ARG_SEARCH_NO_CASE ) != 0 ) ?
                         &strcasestr : &strstr;
@@ -1035,33 +1023,34 @@ static void search_buffer ( char buffer [ LBUF_SZ ], char ** needles,
         for ( int i = 0; i < ncount; i++ ) {
                 buffer = buffer_start;
 
-                if ( needles [ i ] [ 0 ] == '\0' ||
-                                ( bare_query = construct_query ( query,
-                                                needles [ i ] ) ) == -1 )
+                if ( needles [ i ] [ 0 ] == '\0' )
                         /* Ignore entries consisting of erroneous or empty
                          * needles. */
                         continue;
 
-                do {
-                        if ( ( ptr = searcher ( buffer, ( bare_query == 1 )
-                                                ? needles [ i ] : query ) )
+                do
+                        if ( ( mt_start = searcher ( buffer, needles [ i ] ) )
                                         != NULL ) {
-                                if ( ( ptr = find_line_bounds ( buffer, ptr,
-                                                                &buffer ) )
+                                if ( ( ln_start = find_line_bounds ( buffer,
+                                                        mt_start, &buffer ) )
                                                 == NULL )
                                         break;
 
+                                if ( CHK_ARG ( options, ARG_SEARCH_STRICT ) != 0
+                                                && verify_strict_compliance
+                                                ( ln_start, mt_start ) == -1 )
+                                        continue;
+
                                 bi->truncated = ( buffer == NULL );
-                                print_search_result ( ptr, repo, needles [ i ],
-                                                bi );
+                                print_search_result ( ln_start, repo,
+                                                needles [ i ], bi );
                                 if ( buffer == NULL )
                                         break; /* end of buffer; see `marker` */
 
-                                /* undo the terminator added by
-                                 * find_line_bounds */
-                                ptr [ buffer - ptr ] = '\n';
+                                /* undo the change made by `find_line_bounds` */
+                                mt_start [ buffer - mt_start ] = '\n';
                         }
-                } while ( ptr != NULL );
+                while ( mt_start != NULL );
         }
 }
 
