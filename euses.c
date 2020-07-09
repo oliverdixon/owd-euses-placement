@@ -1028,29 +1028,28 @@ static void search_buffer ( char buffer [ LBUF_SZ ], char ** needles,
                          * needles. */
                         continue;
 
-                do
-                        if ( ( mt_start = searcher ( buffer, needles [ i ] ) )
-                                        != NULL ) {
-                                if ( ( ln_start = find_line_bounds ( buffer,
-                                                        mt_start, &buffer ) )
-                                                == NULL )
-                                        break;
+                while ( ( mt_start = searcher ( buffer, needles [ i ] ) )
+                                != NULL ) {
+                        if ( ( ln_start = find_line_bounds ( buffer, mt_start,
+                                                        &buffer ) ) == NULL )
+                                break;
 
-                                if ( CHK_ARG ( options, ARG_SEARCH_STRICT ) != 0
-                                                && verify_strict_compliance
-                                                ( ln_start, mt_start ) == -1 )
-                                        continue;
-
-                                bi->truncated = ( buffer == NULL );
-                                print_search_result ( ln_start, repo,
-                                                needles [ i ], bi );
-                                if ( buffer == NULL )
-                                        break; /* end of buffer; see `marker` */
-
-                                /* undo the change made by `find_line_bounds` */
+                        if ( CHK_ARG ( options, ARG_SEARCH_STRICT ) != 0
+                                        && verify_strict_compliance
+                                        ( ln_start, mt_start ) == -1 ) {
                                 mt_start [ buffer - mt_start ] = '\n';
+                                continue;
                         }
-                while ( mt_start != NULL );
+
+                        bi->truncated = ( buffer == NULL );
+                        print_search_result ( ln_start, repo,
+                                        needles [ i ], bi );
+                        if ( buffer == NULL )
+                                break; /* end of buffer; see `marker` */
+
+                        /* undo the change made by `find_line_bounds` */
+                        mt_start [ buffer - mt_start ] = '\n';
+                }
         }
 }
 
