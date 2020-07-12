@@ -97,7 +97,7 @@ static enum argument_status_t match_abbr_arg ( const char * str )
         for ( size_t i = 1; i < len; i++ ) {
                 found = 0;
 
-                for ( int j = 0; j < abbr_sz; j++ ) {
+                for ( int j = 0; j < abbr_sz; j++ )
                         if ( str [ i ] == abbr_list [ j ] ) {
                                 if ( CHK_ARG ( options, 1 << j ) != 0 )
                                         return ARGSTAT_DOUBLE;
@@ -109,7 +109,6 @@ static enum argument_status_t match_abbr_arg ( const char * str )
 
                                 break;
                         }
-                }
 
                 if ( found == 0 )
                         return ARGSTAT_UNABBR;
@@ -151,13 +150,12 @@ static enum argument_status_t argument_subprocessor ( char * arg )
                 }
 
                 SET_ARG ( options, apos );
-        } else {
+        } else
                 if ( ( argstat = match_abbr_arg ( arg ) ) != ARGSTAT_OK ) {
                         /* combined arguments */
                         populate_info_buffer ( arg );
                         return argstat;
                 }
-        }
 
         return ARGSTAT_OK;
 }
@@ -187,7 +185,7 @@ int process_args ( int argc, char ** argv, int * advanced_idx )
                 return -1;
         }
 
-        for ( ; i < argc; i++ ) {
+        for ( ; i < argc; i++ )
                 if ( ( argstat = argument_subprocessor ( argv [ i ] ) )
                                 != ARGSTAT_OK ) {
                         if ( argstat == ARGSTAT_NOMORE )
@@ -204,7 +202,6 @@ int process_args ( int argc, char ** argv, int * advanced_idx )
                                         &provide_arg_error );
                         return -1;
                 }
-        }
 
         *advanced_idx = i;
         return 0;

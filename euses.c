@@ -233,9 +233,8 @@ static enum status_t ini_get_name ( char name [ NAME_MAX ],
                 if ( ( start = strchr ( buffer, '[' ) ) == NULL
                                 || ( end = strchr ( buffer, ']' ) ) == NULL ||
                                 * ( start++ ) == '\0' || * ( end + 1 ) == '\0'
-                                || end < start ) {
+                                || end < start )
                         return STATUS_ININME;
-                }
 
                 start [ end - start ] = '\0';
                 buffer = end + 1;
@@ -303,12 +302,9 @@ static enum status_t get_keyval_value ( char location [ PATH_MAX ],
                 return STATUS_INILOC;
 
         for ( int i = 0; !keyvalue_found && start [ i ] != '\0' &&
-                        i < BUFFER_SZ; i++ ) {
+                        i < BUFFER_SZ; i++ )
                 if ( start [ i ] == '=' )
                         keyvalue_found = 1;
-
-                break;
-        }
 
         if ( !keyvalue_found || * ( start++ ) < ASCII_MIN ||
                         * ( start ) > ASCII_MAX )
@@ -1008,8 +1004,7 @@ static inline int verify_strict_compliance ( char * ln_start, char * mt_start )
 /* search_buffer: search the `buffer` for the provided `needles`, of which there
  * are `ncount`. This function searches and prints the results as soon as they
  * are found, and, providing uninterrupted execution, exits with `buffer`
- * unchanged. TODO: investigate the advantages of strstr(3) alternative
- * implementations, such as Boyer-Moore. */
+ * unchanged. */
 
 static void search_buffer ( char buffer [ LBUF_SZ ], char ** needles,
                 int ncount, struct repo_t * repo, struct buffer_info_t * bi )
@@ -1035,8 +1030,11 @@ static void search_buffer ( char buffer [ LBUF_SZ ], char ** needles,
                                 break;
 
                         if ( CHK_ARG ( options, ARG_SEARCH_STRICT ) != 0
-                                        && verify_strict_compliance
-                                        ( ln_start, mt_start ) == -1 ) {
+                                        && verify_strict_compliance ( ln_start,
+                                                mt_start ) == -1 ) {
+                                if ( buffer == NULL )
+                                        break;
+
                                 mt_start [ buffer - mt_start ] = '\n';
                                 continue;
                         }
