@@ -45,13 +45,22 @@
 #define PORTAGE_MAKECONF   "/../make.conf"
 #define DEFAULT_REPO_NAME  "gentoo"
 
-/* Globbin' patterns relative to the repository base locations. */
-#define GLOB_PATTERN_ROOT "/profiles/*.desc"
-#define GLOB_PATTERN_DESC "/profiles/desc/*.desc"
+enum pattern_types_t {
+        PATTERN_STD = 0,
+        PATTERN_PKG = 1,
+        PATTERN_GLB = 2
+};
 
-/* Patterns for ARG_PKG_FILES_ONLY */
-#define GLOB_PATTERN_ROOT_PKG "/profiles/*.local*.desc"
-#define GLOB_PATTERN_DESC_PKG "/profiles/desc/*.local*.desc"
+const char * glob_patterns [ 3 ] [ 2 ] = {
+        /* Globbin' patterns relative to the repository base locations. */
+        { "/profiles/*.desc", "/profiles/desc/*.desc" },
+
+        /* Patterns for ARG_PKG_FILES_ONLY */
+        { "/profiles/*.local*.desc", "/profiles/desc/*.local*.desc" },
+
+        /* Patterns for ARG_GLOBAL_ONLY */
+        { "/profiles/*[!.local].desc", "/profiles/desc/*[!.local].desc" }
+};
 
 enum status_t {
         STATUS_ERRNO  =  1, /* c.f. perror or strerror on errno */
@@ -666,25 +675,41 @@ static char * find_line_bounds ( char * buffer_start, char * substr_start,
         return start;
 }
 
+/* select_glob_patterns: set the `patterns` to the appropriate globbing
+ * patterns, determined by the command-line arguments. `patterns [ 0 ]` is set
+ * to the root pattern, and `patterns [ 1 ]` is set to the desc/ variant. */
+
+static void select_glob_patterns ( char * patterns [ 2 ] )
+{
+        enum pattern_types_t idx = PATTERN_STD;
+
+        if ( CHK_ARG ( options, ARG_PKG_FILES_ONLY ) != 0 )
+                idx = PATTERN_PKG;
+        else if ( CHK_ARG ( options, ARG_GLOBAL_ONLY ) != 0 )
+                idx = PATTERN_GLB;
+
+        patterns [ 0 ] = ( char * ) glob_patterns [ idx ] [ 0 ];
+        patterns [ 1 ] = ( char * ) glob_patterns [ idx ] [ 1 ];
+}
+
 /* populate_glob: collate all entries matching repo_base + GLOB_PATTERN_
- * {ROOT,DESC} in the glob_buf using glob(3). If ARG_PKG_FILES_ONLY is set, the
- * _PKG variants are used. This function returns -1 on failure---in which case
- * errno and the information buffer are set appropriately, and zero on success.
- * It is the responsibility of the caller to use globfree(3) for cleaning up the
- * static allocations of glob. */
+ * {ROOT,DESC} in the glob_buf using glob(3).  This function returns -1 on
+ * failure---in which case errno and the information buffer are set
+ * appropriately, and zero on success.  It is the responsibility of the caller
+ * to use globfree(3) for cleaning up the static allocations of glob. */
 
 static int populate_glob ( char repo_base [ NAME_MAX + 1 ], glob_t * glob_buf )
 {
         int status = 0;
         unsigned int base_len = strlen ( repo_base );
+        char * patterns [ 2 ];
+
         glob_buf->gl_pathc = 0;
+        select_glob_patterns ( patterns );
 
         /* This is an awkward chain of returns, but it must be done as such
          * (avoid `goto`). */
-        if ( construct_path ( repo_base, NULL, ( CHK_ARG ( options,
-                                                ARG_PKG_FILES_ONLY ) != 0 ) ?
-                                GLOB_PATTERN_ROOT_PKG : GLOB_PATTERN_ROOT )
-                        == -1 )
+        if ( construct_path ( repo_base, NULL, patterns [ 0 ] ) == -1 )
                 return -1;
 
         if ( ( status = glob ( repo_base, 0, NULL, glob_buf ) ) == GLOB_NOSPACE
@@ -694,10 +719,7 @@ static int populate_glob ( char repo_base [ NAME_MAX + 1 ], glob_t * glob_buf )
         }
 
         repo_base [ base_len ] = '\0';
-        if ( construct_path ( repo_base, NULL, ( CHK_ARG ( options,
-                                                ARG_PKG_FILES_ONLY ) != 0 ) ?
-                                GLOB_PATTERN_DESC_PKG : GLOB_PATTERN_DESC )
-                        == -1 )
+        if ( construct_path ( repo_base, NULL, patterns [ 1 ] ) == -1 )
                 return -1;
 
         if ( ( status = glob ( repo_base, GLOB_APPEND, NULL, glob_buf ) )
@@ -979,9 +1001,14 @@ static void print_search_result ( char * result_str, struct repo_t * repo,
 
         if ( CHK_ARG ( options, ARG_PRINT_REPO_PATHS ) != 0 )
                 /* ARG_PRINT_REPO_PATHS implies ARG_PRINT_REPO_NAMES */
-                printf ( "%s::%s::", repo->location, repo->name ); 
+                printf ( ( CHK_ARG ( options, ARG_COLOUR_OUTPUT ) ) ?
+                                HIGHLIGHT_REPO "%s" HIGHLIGHT_STD "::"
+                                HIGHLIGHT_REPO "%s" HIGHLIGHT_STD "::" :
+                                "%s::%s::", repo->location, repo->name );
         else if ( CHK_ARG ( options, ARG_PRINT_REPO_NAMES ) != 0 )
-                printf ( "%s::", repo->name );
+                printf ( ( CHK_ARG ( options, ARG_COLOUR_OUTPUT ) ) ?
+                                HIGHLIGHT_REPO "%s" HIGHLIGHT_STD "::" : "%s::",
+                                repo->name );
 
         if ( CHK_ARG ( options, ARG_COLOUR_OUTPUT ) != 0 )
                 print_coloured_result ( result_str, bi );

@@ -39,5 +39,10 @@
 #define HIGHLIGHT_USEFLAG COLOUR_BOLD_GREEN
 #endif
 
+#ifndef HIGHLIGHT_REPO
+/* Colour for repository names */
+#define HIGHLIGHT_REPO COLOUR_YELLOW
+#endif
+
 #endif /* _COLOUR_H */
 

@@ -88,14 +88,20 @@ shortly after, as the system could not perform an
 .BR "\-\-package", " \-k"
 Restrict the search to category-package files, excluding description files of
 global USE-flags. In practice, this only includes files containing
-.BR *.local " in the search."
+.BR *.local " in the search. This option conflicts with the " --global / -g
+option.
 .TP
 .BR "\-\-colour", " \-o"
 Prettify the output on A.N.S.I.-compliant terminals. To change the colours,
-.RB "define the " HIGHLIGHT_PACKAGE " and " HIGHLIGHT_USEFLAG " compile-time"
-constants for the package and flag names respectively.
-.BR HIGHLIGHT_STD " can also be defined to change the default colour of the"
-entire output.
+.RB "define the " HIGHLIGHT_PACKAGE ", " HIGHLIGHT_USEFLAG ", and/or "
+.BR HIGHLIGHT_REPO " compile-time constants for the package, flag, and repo "
+.RB "names respectively. " HIGHLIGHT_STD " can also be defined to change the
+default colour of the" entire output.
+.TP
+.BR "\-\-global", "\-g"
+Exclude all files describing package-local flags (i.e., files containing the
+.BR .local " extension in their name). This option conflicts with the"
+.BR --package / -k .
 .TP
 .BR \-\-
 .RB "If " \-\- " is passed on the command-line, all further arguments are"

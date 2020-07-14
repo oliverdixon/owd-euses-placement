@@ -9,7 +9,6 @@
 #include "args.h"
 
 #define SET_ARG(val, n) ( val |= n )
-#define ERROR_PREFIX "Inadequate command-line arguments were provided."
 
 enum argument_status_t {
         ARGSTAT_OK     =  0, /* everything is OK */
@@ -19,7 +18,8 @@ enum argument_status_t {
         ARGSTAT_EMPTY  = -4, /* the provided argument was meaningless/empty */
         ARGSTAT_UNABBR = -5, /* the command-abbreviation list was erroneous */
         ARGSTAT_NOMORE = -6, /* further arguments should not be considered */
-        ARGSTAT_NOMREE = -7  /* ARGSTAT_NOMORE, but it was explicitly defined */
+        ARGSTAT_NOMREE = -7, /* ARGSTAT_NOMORE, but it was explicitly defined */
+        ARGSTAT_GLBPKG = -8  /* ARG_GLOBAL_ONLY and ARG_PKG_FILES_ONLY set */
 };
 
 opts_t options = 0;
@@ -38,6 +38,8 @@ static const char * provide_arg_error ( int status )
                 case ARGSTAT_EMPTY:  return "Argument was empty.";
                 case ARGSTAT_UNABBR: return "One of the abbreviated arguments" \
                                         " was unrecognised.";
+                case ARGSTAT_GLBPKG: return "The global and package options" \
+                                        " cannot be set simultaneously.";
 
                 default:             return "Unknown error";
         }
@@ -54,12 +56,12 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
         static const char * arg_full [ ] = {
                 "repo-names", "repo-paths", "help", "version", "list-repos",
                 "strict", "quiet", "no-case", "portdir", "print-needles",
-                "no-interrupt", "package", "colour"
+                "no-interrupt", "package", "colour", "global"
         }, arg_abv [ ] = {
                 /* For a long-form argument which does not have an abbreviated
                  * form, the corresponding entry in arg_abv should be a NULL-
                  * terminator. */
-                'n', 'p', 'h', 'v', 'r', 's', 'q', 'c', 'd', 'e', 'i', 'k', 'o'
+                "nphvrsqcdeikog"
         };
 
         /* `fargc`: full argument count. This should be more than or equal to
@@ -89,7 +91,7 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
 
 static enum argument_status_t match_abbr_arg ( const char * str )
 {
-        static const char * abbr_list = "nphvrsqcdeiko";
+        static const char * abbr_list = "nphvrsqcdeikog";
         const int abbr_sz = strlen ( abbr_list );
         size_t len = strlen ( str );
         int found = 0;
@@ -160,6 +162,18 @@ static enum argument_status_t argument_subprocessor ( char * arg )
         return ARGSTAT_OK;
 }
 
+/* contradiction_check: check for obvious contradictions in the argument
+ * listing. If they appear, the appropriate `argument_status_t` code is
+ * returned; ARGSTAT_OK otherwise. */
+
+static inline enum argument_status_t contradiction_check ( )
+{
+        /* TODO: check for ARG_ATTEMPT_PORTDIR and ARG_LIST_REPOS */
+        return ( CHK_ARG ( options, ARG_GLOBAL_ONLY ) != 0 &&
+                        CHK_ARG ( options, ARG_PKG_FILES_ONLY ) != 0 ) ?
+                ARGSTAT_GLBPKG : ARGSTAT_OK;
+}
+
 /* [exposed function] process_args: process the argument list in `argv` and
  * populate the `options` global variable accordingly. This function, due to its
  * notability, produces its own error functions directly to the appropriate
@@ -177,11 +191,13 @@ static enum argument_status_t argument_subprocessor ( char * arg )
 
 int process_args ( int argc, char ** argv, int * advanced_idx )
 {
+        const char * error_prefix = "Inadequate command-line arguments " \
+                                     "were provided.";
         enum argument_status_t argstat = ARGSTAT_OK;
         int i = 1;
 
         if ( argc < 2 ) {
-                print_fatal ( ERROR_PREFIX, ARGSTAT_LACK, &provide_arg_error );
+                print_fatal ( error_prefix, ARGSTAT_LACK, &provide_arg_error );
                 return -1;
         }
 
@@ -198,10 +214,17 @@ int process_args ( int argc, char ** argv, int * advanced_idx )
                                 break;
                         }
 
-                        print_fatal ( ERROR_PREFIX, argstat,
+                        print_fatal ( error_prefix, argstat,
                                         &provide_arg_error );
                         return -1;
                 }
+
+        if ( ( argstat = contradiction_check ( ) ) != ARGSTAT_OK ) {
+                /* Finished. Check for obvious contradictions. */
+                populate_info_buffer ( NULL );
+                print_fatal ( error_prefix, argstat, &provide_arg_error );
+                return -1;
+        }
 
         *advanced_idx = i;
         return 0;

@@ -71,8 +71,7 @@ void populate_info_buffer ( const char * message )
 {
         size_t msg_len = 0;
 
-        info_buffer [ 0 ] = '\0'; /* previous call did not result in a fatal */
-
+        info_buffer [ 0 ] = '\0';
         if ( message == NULL )
                 return;
 
@@ -128,8 +127,8 @@ void print_help_info ( const char * invocation )
                         "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
                         "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
                         "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
-                        "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n",
-                        invocation,
+                        "--%-13s -%-3c\t%s\n--%-13s -%-3c\t%s\n" \
+                        "--%-13s -%-3c\t%s\n", invocation,
 
                         "list-repos", 'r', "Prepend a list of located " \
                                 "repositories (repos.conf/ only).",
@@ -154,6 +153,8 @@ void print_help_info ( const char * invocation )
                                 "package description files.",
                         "colour", 'o', "Print the package, flag, and" \
                                 " description in distinct colours.",
+                        "global", 'g', "Exclude all sources describing "
+                                "package-local flags.",
                         "", '\b', "Consider all further arguments as " \
                                 "substrings/queries." );
 }
