@@ -85,20 +85,20 @@ these warnings are suppressed, it is likely that a fatal error will appear
 shortly after, as the system could not perform an
 .BR fread "(3) call on the USE-description file."
 .TP
-.BR "\-\-package", " \-k"
+.BR "\-\-package", " \-k" " (conflicts with " \-\-global )
 Restrict the search to category-package files, excluding description files of
 global USE-flags. In practice, this only includes files containing
 .BR *.local " in the search. This option conflicts with the " --global / -g
 option.
 .TP
-.BR "\-\-colour", " \-o"
-Prettify the output on A.N.S.I.-compliant terminals. To change the colours,
+.BR "\-\-nocolour", " \-o"
+Do not colourise the search results. To change the colours,
 .RB "define the " HIGHLIGHT_PACKAGE ", " HIGHLIGHT_USEFLAG ", and/or "
 .BR HIGHLIGHT_REPO " compile-time constants for the package, flag, and repo "
 .RB "names respectively. " HIGHLIGHT_STD " can also be defined to change the
 default colour of the" entire output.
 .TP
-.BR "\-\-global", "\-g"
+.BR "\-\-global", " \-g" " (conflicts with " \-\-package )
 Exclude all files describing package-local flags (i.e., files containing the
 .BR .local " extension in their name). This option conflicts with the"
 .BR --package / -k .

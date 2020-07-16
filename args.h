@@ -30,7 +30,7 @@
  *  - ARG_PKG_FILES_ONLY: only search files whose names contain ".local". In
  *    practice, this restricts the search to files only containing category-
  *    package pairs, and exclude global USE-flag-description files;
- *  - ARG_COLOUR_OUTPUT: make the output pretty and colourful;
+ *  - ARG_NO_COLOUR: disabled coloured output;
  *  - ARG_GLOBAL_ONLY: [conflicts with ARG_PKG_FILES_ONLY] do not search files
  *    containing package-local flags. */
 
@@ -48,7 +48,7 @@ enum arg_positions_t {
         ARG_PRINT_NEEDLE     =  512,
         ARG_NO_MIDBUF_WARN   = 1024,
         ARG_PKG_FILES_ONLY   = 2048,
-        ARG_COLOUR_OUTPUT    = 4096,
+        ARG_NO_COLOUR        = 4096,
         ARG_GLOBAL_ONLY      = 8192  /* 14th bit */
 };
 

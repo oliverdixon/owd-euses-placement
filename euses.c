@@ -1001,19 +1001,19 @@ static void print_search_result ( char * result_str, struct repo_t * repo,
 
         if ( CHK_ARG ( options, ARG_PRINT_REPO_PATHS ) != 0 )
                 /* ARG_PRINT_REPO_PATHS implies ARG_PRINT_REPO_NAMES */
-                printf ( ( CHK_ARG ( options, ARG_COLOUR_OUTPUT ) ) ?
-                                HIGHLIGHT_REPO "%s" HIGHLIGHT_STD "::"
-                                HIGHLIGHT_REPO "%s" HIGHLIGHT_STD "::" :
-                                "%s::%s::", repo->location, repo->name );
+                printf ( ( CHK_ARG ( options, ARG_NO_COLOUR ) ) ?
+                                "%s::%s::" : HIGHLIGHT_REPO "%s" HIGHLIGHT_STD
+                                "::" HIGHLIGHT_REPO "%s" HIGHLIGHT_STD "::",
+                                repo->location, repo->name );
         else if ( CHK_ARG ( options, ARG_PRINT_REPO_NAMES ) != 0 )
-                printf ( ( CHK_ARG ( options, ARG_COLOUR_OUTPUT ) ) ?
-                                HIGHLIGHT_REPO "%s" HIGHLIGHT_STD "::" : "%s::",
+                printf ( ( CHK_ARG ( options, ARG_NO_COLOUR ) ) ? "%s::" :
+                                HIGHLIGHT_REPO "%s" HIGHLIGHT_STD "::",
                                 repo->name );
 
-        if ( CHK_ARG ( options, ARG_COLOUR_OUTPUT ) != 0 )
-                print_coloured_result ( result_str, bi );
-        else
+        if ( CHK_ARG ( options, ARG_NO_COLOUR ) )
                 print_uncoloured_output ( result_str, bi );
+        else
+                print_coloured_result ( result_str, bi );
 }
 
 /* verify_strict_compliance: assuming `ARG_SEARCH_STRICT` is set, this function

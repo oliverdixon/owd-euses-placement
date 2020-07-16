@@ -56,7 +56,7 @@ static int match_arg ( const char * arg, enum arg_positions_t * apos )
         static const char * arg_full [ ] = {
                 "repo-names", "repo-paths", "help", "version", "list-repos",
                 "strict", "quiet", "no-case", "portdir", "print-needles",
-                "no-interrupt", "package", "colour", "global"
+                "no-interrupt", "package", "nocolour", "global"
         }, arg_abv [ ] = {
                 /* For a long-form argument which does not have an abbreviated
                  * form, the corresponding entry in arg_abv should be a NULL-
@@ -168,7 +168,6 @@ static enum argument_status_t argument_subprocessor ( char * arg )
 
 static inline enum argument_status_t contradiction_check ( )
 {
-        /* TODO: check for ARG_ATTEMPT_PORTDIR and ARG_LIST_REPOS */
         return ( CHK_ARG ( options, ARG_GLOBAL_ONLY ) != 0 &&
                         CHK_ARG ( options, ARG_PKG_FILES_ONLY ) != 0 ) ?
                 ARGSTAT_GLBPKG : ARGSTAT_OK;
