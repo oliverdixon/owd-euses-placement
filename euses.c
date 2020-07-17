@@ -10,7 +10,6 @@
 #include <errno.h>
 #include <stdio.h>
 #include <dirent.h>
-#include <glob.h>
 #include <stddef.h> /* ptrdiff_t */
 
 #include "euses.h"
@@ -18,6 +17,7 @@
 #include "converse.h"
 #include "stack.h"
 #include "colour.h"
+#include "globbing.h"
 
 #define BUFFER_SZ   ( 4096 )
 #define SBUF_SZ     ( 256  )
@@ -44,23 +44,6 @@
 #define CONFIGROOT_DEFAULT "/etc/portage"
 #define PORTAGE_MAKECONF   "/../make.conf"
 #define DEFAULT_REPO_NAME  "gentoo"
-
-enum pattern_types_t {
-        PATTERN_STD = 0,
-        PATTERN_PKG = 1,
-        PATTERN_GLB = 2
-};
-
-const char * glob_patterns [ 3 ] [ 2 ] = {
-        /* Globbin' patterns relative to the repository base locations. */
-        { "/profiles/*.desc", "/profiles/desc/*.desc" },
-
-        /* Patterns for ARG_PKG_FILES_ONLY */
-        { "/profiles/*.local*.desc", "/profiles/desc/*.local*.desc" },
-
-        /* Patterns for ARG_GLOBAL_ONLY */
-        { "/profiles/*[!.local].desc", "/profiles/desc/*[!.local].desc" }
-};
 
 enum status_t {
         STATUS_ERRNO  =  1, /* c.f. perror or strerror on errno */
@@ -191,13 +174,14 @@ static inline void dnull ( DIR ** dp )
         }
 }
 
-/* construct_path: copy `a` to `dest`, and then append `b`. This function
- * returns zero on success, or -1 on failure. In the latter case, errno is set
- * appropriately and the error buffer is populated with `b`. The destination
- * string is null-terminated on success, and truncated to zero on failure. If
- * `a` appears as NULL, `b` is appended to the current contents of `dest`. */
+/* [exposed function] construct_path: copy `a` to `dest`, and then append `b`.
+ * This function returns zero on success, or -1 on failure. In the latter case,
+ * errno is set appropriately and the error buffer is populated with `b`. The
+ * destination string is null-terminated on success, and truncated to zero on
+ * failure. If `a` appears as NULL, `b` is appended to the current contents of
+ * `dest`. */
 
-static int construct_path ( char * dest, const char * a, const char * b )
+int construct_path ( char * dest, const char * a, const char * b )
 {
         size_t len = 0;
 
@@ -673,63 +657,6 @@ static char * find_line_bounds ( char * buffer_start, char * substr_start,
                 substr_start [ end - substr_start ] = '\0';
 
         return start;
-}
-
-/* select_glob_patterns: set the `patterns` to the appropriate globbing
- * patterns, determined by the command-line arguments. `patterns [ 0 ]` is set
- * to the root pattern, and `patterns [ 1 ]` is set to the desc/ variant. */
-
-static void select_glob_patterns ( char * patterns [ 2 ] )
-{
-        enum pattern_types_t idx = PATTERN_STD;
-
-        if ( CHK_ARG ( options, ARG_PKG_FILES_ONLY ) != 0 )
-                idx = PATTERN_PKG;
-        else if ( CHK_ARG ( options, ARG_GLOBAL_ONLY ) != 0 )
-                idx = PATTERN_GLB;
-
-        patterns [ 0 ] = ( char * ) glob_patterns [ idx ] [ 0 ];
-        patterns [ 1 ] = ( char * ) glob_patterns [ idx ] [ 1 ];
-}
-
-/* populate_glob: collate all entries matching repo_base + GLOB_PATTERN_
- * {ROOT,DESC} in the glob_buf using glob(3).  This function returns -1 on
- * failure---in which case errno and the information buffer are set
- * appropriately, and zero on success.  It is the responsibility of the caller
- * to use globfree(3) for cleaning up the static allocations of glob. */
-
-static int populate_glob ( char repo_base [ NAME_MAX + 1 ], glob_t * glob_buf )
-{
-        int status = 0;
-        unsigned int base_len = strlen ( repo_base );
-        char * patterns [ 2 ];
-
-        glob_buf->gl_pathc = 0;
-        select_glob_patterns ( patterns );
-
-        /* This is an awkward chain of returns, but it must be done as such
-         * (avoid `goto`). */
-        if ( construct_path ( repo_base, NULL, patterns [ 0 ] ) == -1 )
-                return -1;
-
-        if ( ( status = glob ( repo_base, 0, NULL, glob_buf ) ) == GLOB_NOSPACE
-                        || status == GLOB_ABORTED ) {
-                populate_info_buffer ( repo_base );
-                return -1;
-        }
-
-        repo_base [ base_len ] = '\0';
-        if ( construct_path ( repo_base, NULL, patterns [ 1 ] ) == -1 )
-                return -1;
-
-        if ( ( status = glob ( repo_base, GLOB_APPEND, NULL, glob_buf ) )
-                        == GLOB_NOSPACE || status == GLOB_ABORTED ) {
-                populate_info_buffer ( repo_base );
-                return -1;
-        }
-
-        repo_base [ base_len ] = '\0';
-        return 0;
 }
 
 /* process_seamless_buffer: validate/parse and print from the start of the

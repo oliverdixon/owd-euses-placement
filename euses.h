@@ -20,5 +20,7 @@ struct repo_t {
         struct repo_t * next;
 };
 
+int construct_path ( char *, const char *, const char * );
+
 #endif /* _EUSES_H */
 
