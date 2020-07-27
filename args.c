@@ -1,7 +1,6 @@
 /* ash-euses: argument-processor
  * Ashley Dixon. */
 
-#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 

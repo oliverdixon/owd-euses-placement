@@ -6,7 +6,6 @@
 #include <errno.h>
 #include <stdlib.h>
 
-#include "args.h"
 #include "euses.h"
 #include "converse.h"
 
@@ -75,12 +74,16 @@ void populate_info_buffer ( const char * message )
         if ( message == NULL )
                 return;
 
+#if defined(__GNUC__) && !defined(__clang__) && !defined(__INTEL_COMPILER)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-truncation"
         /* If strncpy truncates the NULL-terminator from the source, it is
          * re-added in the following truncation `if` block. */
         strncpy ( info_buffer, message, ERROR_MAX - 1 );
 #pragma GCC diagnostic pop
+#else
+        strncpy ( info_buffer, message, ERROR_MAX - 1 );
+#endif
 
         if ( ( msg_len = strlen ( message ) ) >= ERROR_MAX - 1 ) {
                 /* indicate that the message in the error buffer has been
