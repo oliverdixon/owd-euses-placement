@@ -16,13 +16,14 @@ enum pattern_types_t {
 
 const char * glob_patterns [ 3 ] [ 2 ] = {
         /* Globbin' patterns relative to the repository base locations. */
-        { "/profiles/*.desc", "/profiles/desc/*.desc" },
+        { "/profiles/*\\.desc", "/profiles/desc/*\\.desc" },
 
         /* Patterns for ARG_PKG_FILES_ONLY */
-        { "/profiles/*.local*.desc", "/profiles/desc/*.local*.desc" },
+        { "/profiles/*\\.local*\\.desc", "/profiles/desc/*\\.local*\\.desc" },
 
         /* Patterns for ARG_GLOBAL_ONLY */
-        { "/profiles/*[!.local].desc", "/profiles/desc/*[!.local].desc" }
+        { "/profiles/*[!\\.local]\\.desc",
+                "/profiles/desc/*[!\\.local]\\.desc" }
 };
 
 /* select_glob_patterns: set the `patterns` to the appropriate globbing

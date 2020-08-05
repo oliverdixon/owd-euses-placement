@@ -19,14 +19,14 @@
 #include "colour.h"
 #include "globbing.h"
 
-#define BUFFER_SZ   ( 4096 )
-#define SBUF_SZ     ( 256  )
-#define LBUF_SZ_MIN ( 128  )
+#define BUFFER_SZ   ( 4096 ) /* Non-primary buffer size */
+#define SBUF_SZ     ( 512  ) /* Read-ahead size for printing underflows. */
+#define LBUF_SZ_MIN ( 512  ) /* Minimum primary buffer size. */
 
 #ifndef LBUF_SZ
 /* A user/distributor may want to change this. For an explanation of the
  * potential reasoning behind this, see the QUIRKS section of the manual. */
-#define LBUF_SZ     ( 8192 )
+#define LBUF_SZ     ( 8192 ) /* Default primary buffer size. */
 #else
 #if LBUF_SZ < LBUF_SZ_MIN
 /* Anything lower than LBUF_SZ_MIN would cause the output to be about as
@@ -36,8 +36,9 @@
 #endif /* LBUF_SZ < LBUF_SZ_MIN */
 #endif /* LBUF_SZ */
 
-#define ASCII_MIN ( 0x20 )
-#define ASCII_MAX ( 0x7E )
+#define ASCII_MIN    ( 0x20 )
+#define ASCII_MAX    ( 0x7E )
+#define LINE_COMMENT ( '#'  )
 
 #define CONFIGROOT_ENVNAME "PORTAGE_CONFIGROOT"
 #define CONFIGROOT_SUFFIX  "/repos.conf/"
@@ -427,7 +428,7 @@ static enum status_t register_repo ( char base [ ], char * filename,
 }
 
 /* enumerate_repo_descriptions: adds the regular files (repository configuration
- * files) contained within `base` to the given. On success, this function
+ * files) contained within `base` to the given stack. On success, this function
  * returns STATUS_OK, otherwise STATUS_ERRNO, in which case errno is set
  * appropriately. The file `gentoo.conf` must exist within the base directory;
  * if this is not the case, STATUS_NOGENR is returned. If ARG_LIST_REPOS was set
@@ -875,11 +876,16 @@ static void print_coloured_transbuffer_result ( char * result_str,
 static inline void locate_field_delims ( char * str, ptrdiff_t * pkgflag,
                 ptrdiff_t * flagdesc )
 {
-        *pkgflag = strchr ( str, ':' ) - str;
+        ptrdiff_t tmp;
         *flagdesc = strstr ( str, " - " ) - str;
 
+        if ( ( tmp = strchr ( str, ':' ) - str ) < *flagdesc )
+                /* Ensure the package-flag delimiter precedes the
+                 * flag-description delimiter. */
+                *pkgflag = tmp;
+
         /* strstr, on most libc implementations, is extremely fast for short
-         * needles (around three or four characters). Only when the needle
+         * needles (usually a maximum of three characters). Only when the needle
          * exceeds 256 characters is the standard two-way algorithm used, and
          * even that uses a shift table. */
 }
@@ -980,7 +986,8 @@ static void search_buffer ( char buffer [ LBUF_SZ ], char ** needles,
                 while ( ( mt_start = searcher ( buffer, needles [ i ] ) )
                                 != NULL ) {
                         if ( ( ln_start = find_line_bounds ( buffer, mt_start,
-                                                        &buffer ) ) == NULL )
+                                                        &buffer ) ) == NULL
+                                        || *ln_start == LINE_COMMENT )
                                 break;
 
                         if ( CHK_ARG ( options, ARG_SEARCH_STRICT ) != 0
