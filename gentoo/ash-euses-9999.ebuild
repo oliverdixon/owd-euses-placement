@@ -10,7 +10,7 @@ EGIT_REPO_URI="https://git.suugaku.co.uk/ash-euses/"
 
 LICENSE="WTFPL-2"
 SLOT="0"
-KEYWORDS="~amd64 ~x86"
+KEYWORDS=""
 
 S=${WORKDIR}
 
