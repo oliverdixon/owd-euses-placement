@@ -1,5 +1,5 @@
 /* ash-euses: argument-processor
- * Ashley Dixon. */
+ * Oliver Dixon. */
 
 #include <stdio.h>
 #include <string.h>

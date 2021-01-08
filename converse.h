@@ -1,5 +1,5 @@
 /* ash-euses: defines the information buffer and various reporting functions
- * Ashley Dixon. */
+ * Oliver Dixon. */
 
 #ifndef _ERROR_H
 #define _ERROR_H

@@ -1,5 +1,5 @@
 /* ash-euses: main driver
- * Ashley Dixon. */
+ * Oliver Dixon. */
 
 #define _GNU_SOURCE
 /* strcasestr */

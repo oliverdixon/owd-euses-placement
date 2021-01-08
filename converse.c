@@ -1,5 +1,5 @@
 /* ash-euses: direct reporting functions, c.f.\ converse.h.
- * Ashley Dixon. */
+ * Oliver Dixon. */
 
 #include <stdio.h>
 #include <string.h>

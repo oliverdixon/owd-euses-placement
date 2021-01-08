@@ -1,5 +1,5 @@
 /* ash-euses: stack implementation; c.f.\ stack.h
- * Ashley Dixon. */
+ * Oliver Dixon. */
 
 #include <stdlib.h>
 #include <stdio.h>

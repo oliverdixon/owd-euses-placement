@@ -1,5 +1,5 @@
 /* ash-euses: A.N.S.I.\ colouring sequences for highlighting search results
- * Ashley Dixon. */
+ * Oliver Dixon. */
 
 #ifndef _COLOUR_H
 #define _COLOUR_H

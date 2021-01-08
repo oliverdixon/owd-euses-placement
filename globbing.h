@@ -1,5 +1,5 @@
 /* ash-euses: globbing function signatures
- * Ashley Dixon. */
+ * Oliver Dixon. */
 
 #ifndef _GLOBBING_H
 #define _GLOBBING_H

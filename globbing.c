@@ -1,5 +1,5 @@
 /* ash-euses: globbing functions
- * Ashley Dixon. */
+ * Oliver Dixon. */
 
 #include <string.h> /* strlen(3) */
 

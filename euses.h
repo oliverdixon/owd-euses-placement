@@ -1,5 +1,5 @@
 /* ash-euses: common data signatures
- * Ashley Dixon. */
+ * Oliver Dixon. */
 
 #ifndef _EUSES_H
 #define _EUSES_H
@@ -7,7 +7,7 @@
 #include <limits.h>
 
 #define PROGRAM_NAME         "ash-euses"
-#define PROGRAM_AUTHOR       "Ashley Dixon"
+#define PROGRAM_AUTHOR       "Oliver Dixon"
 #define PROGRAM_AUTHOR_EMAIL "ash@suugaku.co.uk"
 #define PROGRAM_YEAR         "MMXX"
 #define PROGRAM_URL          "http://git.suugaku.co.uk/" PROGRAM_NAME "/"
