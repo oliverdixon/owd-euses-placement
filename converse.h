@@ -1,4 +1,4 @@
-/* ash-euses: defines the information buffer and various reporting functions
+/* owd-euses: defines the information buffer and various reporting functions
  * Oliver Dixon. */
 
 #ifndef _ERROR_H

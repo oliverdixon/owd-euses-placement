@@ -1,4 +1,4 @@
-/* ash-euses: argument-processor header
+/* owd-euses: argument-processor header
  * Oliver Dixon. */
 
 #ifndef _ARGS_H

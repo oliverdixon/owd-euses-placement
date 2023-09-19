@@ -1,4 +1,4 @@
-/* ash-euses: globbing functions
+/* owd-euses: globbing functions
  * Oliver Dixon. */
 
 #include <string.h>

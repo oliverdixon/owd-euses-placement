@@ -1,4 +1,4 @@
-/* ash-euses: direct reporting functions; see converse.h.
+/* owd-euses: direct reporting functions; see converse.h.
  * Oliver Dixon. */
 
 #include <stdio.h>

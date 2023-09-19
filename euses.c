@@ -1,4 +1,4 @@
-/* ash-euses: main driver
+/* owd-euses: main driver
  * Oliver Dixon. */
 
 #define _GNU_SOURCE
@@ -1300,7 +1300,7 @@ static int prelim_checks ( int argc, char ** argv, int * arg_idx )
     return 0;
 }
 
-/* main: entry point for ash-euses. See args.h for a list and description of the 
+/* main: entry point for owd-euses. See args.h for a list and description of the 
  * accepted arguments. EXIT_SUCCESS does not necessarily imply a complete
  * execution, but only indicates that no "hard" error was encountered.
  *

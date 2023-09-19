@@ -1,4 +1,4 @@
-/* ash-euses: stack function and data signatures */
+/* owd-euses: stack function and data signatures */
 
 #ifndef _STACK_H
 #define _STACK_H

@@ -1,4 +1,4 @@
-/* ash-euses: argument-processor
+/* owd-euses: argument-processor
  * Oliver Dixon. */
 
 #include <stdio.h>

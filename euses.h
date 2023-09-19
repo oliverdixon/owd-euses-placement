@@ -1,4 +1,4 @@
-/* ash-euses: common data signatures
+/* owd-euses: common data signatures
  * Oliver Dixon. */
 
 #ifndef _EUSES_H

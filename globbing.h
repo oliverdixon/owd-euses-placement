@@ -1,4 +1,4 @@
-/* ash-euses: globbing function signatures
+/* owd-euses: globbing function signatures
  * Oliver Dixon. */
 
 #ifndef _GLOBBING_H

@@ -1,11 +1,11 @@
-.TH ASH-EUSES 1 2020-07-27 git.suugaku.co.uk "General Commands Manual"
+.TH OWD-EUSES 1 2020-07-27 "https://github.com/oliverdixon/owd-euses-placement
 .SH NAME
-.BR ash-euses " \- a rewrite of " euses "(1) for modern Gentoo-like systems"
+.BR owd-euses " \- a rewrite of " euses "(1) for modern Gentoo-like systems"
 .SH SYNOPSIS
-.B ash-euses
+.B owd-euses
 .RI "[" "OPTIONS" "]... [" SUBSTRING "]..."
 .SH DESCRIPTION
-.BR ash-euses " searches for substrings in USE-description files in the "
+.BR owd-euses " searches for substrings in USE-description files in the "
 various repositories, as enumerated by the contents of the
 .IB PORTAGE_CONFIGROOT /repos.conf/
 directory. Each regular file in the directory is assumed to be a
@@ -13,12 +13,12 @@ repository-description and parsed, extracting the
 .BR location " attribute to find the base of the repository. Most users will"
 only care about the
 .BR ::gentoo " repository, however"
-.BR ash-euses " is capable of scanning an arbitrary number of repositories."
+.BR owd-euses " is capable of scanning an arbitrary number of repositories."
 .IR PORTDIR " is also respected as an environment variable or entry in"
 .BR make.conf ", however it is highly discouraged due to deprecation by the "
 Gentoo developers.
 
-.BR ash-euses " scans files matching"
+.BR owd-euses " scans files matching"
 .IB BASE /profiles/*.desc
 where
 .IR BASE " is the value from the"
@@ -113,14 +113,14 @@ If set in the environment, this variable can be used to modify the directory in
 which the Portage configuration files are stored. For example, for a Gentoo
 .RB "root partition mounted in the " /mnt/gentoo
 .RI "directory, " PORTAGE_CONFIGROOT " can be set to force "
-.BR ash-euses " to search "
+.BR owd-euses " to search "
 .BR /mnt/gentoo/etc/portage/repos.conf " for repository-configuration files."
 .TP
 .B PORTDIR
 This is a deprecated, albeit widely used, environment variable or
 .BR make.conf " option to specify the base of the " ::gentoo " repository. On "
 .RB "very old systems, this defaults to " /usr/portage ". If"
-.BR ash-euses " detects the usage of "
+.BR owd-euses " detects the usage of "
 .IR PORTDIR " in either of these locations, it issues a warning and ignores the"
 .BR " repos.conf " "directory. For users and administrators desiring multiple "
 repositories/overlays, it is highly recommended that the new
@@ -136,33 +136,33 @@ directory contains the repository-configuration files for Portage, containing a
 human-readable name, and base directory. Files inside this directory usually are
 suffixed with
 .BR .conf ", however this is not required by the Gentoo specification."
-.BR ash-euses " will fail if the file " gentoo.conf " is not found in the"
+.BR owd-euses " will fail if the file " gentoo.conf " is not found in the"
 directory.
 .TP
 .B make.conf
 .IR $PORTAGE_CONFIGROOT/make.conf " is the primary configuration for Portage, "
 describing various key-value pairs to be used by ebuilds.
-.BR ash-euses " uses this file exclusively for the extraction of the "
+.BR owd-euses " uses this file exclusively for the extraction of the "
 .IR PORTDIR " key."
 .TP
 .B profiles/{,desc/}*.desc
 .IB BASE /profiles/{,desc/}*.desc
-.RB "are the USE-description files searched " ash-euses ", in which
+.RB "are the USE-description files searched " owd-euses ", in which
 .IR BASE " is the base of the current repository
 .RB "directory. If the " --package " option is set, the searching pattern is"
 .RB "restricted to " profiles/{,desc/}*.local*.desc .
 .SH EXAMPLES
 .TP
-.B ash-euses -prv qt5
+.B owd-euses -prv qt5
 Prepending the output with version information and a list of repositories,
 search the files for the "qt5" substring. Each entry is appended with the name
 and location of the repository in which the match was found.
 .TP
-.B ash-euses -sn -- --ipsum
+.B owd-euses -sn -- --ipsum
 Search the files in all repositories for USE-flag fields ending in the "--ipsum"
 substring, appending the name of the relevant repository to each result.
 .TP
-.B PORTAGE_CONFIGROOT=/mnt/gentoo ash-euses -r
+.B PORTAGE_CONFIGROOT=/mnt/gentoo owd-euses -r
 .RB "Using the " /mnt/gentoo/etc/portage " configuration directory, list all"
 .RB "repositories described in the " repos.conf " directory."
 .SH QUIRKS
@@ -180,4 +180,4 @@ execution.
 .BR "euses" "(1), " "emerge" "(1), " "make.conf" "(5), " "portage" "(5), "
 .BR "ebuild" "(1), " glob (3)
 .SH AUTHOR
-.RI "Oliver Dixon <" ash@suugaku.co.uk >
+.RI "Oliver Dixon <" od641@york.ac.uk >

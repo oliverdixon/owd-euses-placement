@@ -4,7 +4,7 @@ PREFIX = /usr/bin
 
 src = $(wildcard *.c)
 obj = $(src:.c=.o)
-bin = ash-euses
+bin = owd-euses
 
 %.o: %.c
 	$(CC) -c -o $@ $< $(CFLAGS)
