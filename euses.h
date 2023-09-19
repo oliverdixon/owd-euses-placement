@@ -1,8 +1,8 @@
 /* owd-euses: common data signatures
  * Oliver Dixon. */
 
-#ifndef _EUSES_H
-#define _EUSES_H
+#ifndef EUSES_H
+#define EUSES_H
 
 #include <limits.h>
 
@@ -22,5 +22,5 @@ struct repo_t {
 
 int construct_path ( char *, const char *, const char * );
 
-#endif /* _EUSES_H */
+#endif /* EUSES_H */
 

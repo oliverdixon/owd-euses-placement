@@ -1,4 +1,4 @@
-/* owd-euses: stack implementation; c.f.\ stack.h
+/* owd-euses: stack implementation; see stack.h
  * Oliver Dixon. */
 
 #include <stdlib.h>

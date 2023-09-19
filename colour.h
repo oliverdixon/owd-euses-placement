@@ -1,8 +1,8 @@
-/* owd-euses: A.N.S.I.\ colouring sequences for highlighting search results
+/* owd-euses: ANSI colouring sequences for highlighting search results
  * Oliver Dixon. */
 
-#ifndef _COLOUR_H
-#define _COLOUR_H
+#ifndef COLOUR_H
+#define COLOUR_H
 
 /* Various common colour codes. Set HIGHLIGHT_PACKAGE and HIGHLIGHT_USEFLAG to
  * one of the following to highlight the package names and USE-flags in the
@@ -44,5 +44,5 @@
 #define HIGHLIGHT_REPO COLOUR_YELLOW
 #endif
 
-#endif /* _COLOUR_H */
+#endif /* COLOUR_H */
 

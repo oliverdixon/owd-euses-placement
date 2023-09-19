@@ -524,7 +524,7 @@ static int feof_stream ( FILE * fp )
  * room in the buffer. If any error occurs, BUFSTAT_ERRNO is returned, and
  * `errno` and the information buffer are populated appropriately.
  *
- * This function always closes (and NULLs; c.f.\ fnull) the relevant file
+ * This function always closes (and NULLs; see fnull) the relevant file
  * pointer should (a) the file have ended, or (b) an error occurs. */
 
 static enum buffer_status_t determine_buffer_nature ( size_t bw,

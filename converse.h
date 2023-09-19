@@ -1,8 +1,8 @@
 /* owd-euses: defines the information buffer and various reporting functions
  * Oliver Dixon. */
 
-#ifndef _ERROR_H
-#define _ERROR_H
+#ifndef ERROR_H
+#define ERROR_H
 
 #include "stack.h"
 
@@ -20,5 +20,5 @@ void list_repos ( struct repo_stack_t *, char * );
 #define ERROR_MAX ( 256 )
 extern char info_buffer [ ERROR_MAX ];
 
-#endif /* _ERROR_H */
+#endif /* ERROR_H */
 

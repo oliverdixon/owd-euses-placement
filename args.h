@@ -1,8 +1,8 @@
 /* owd-euses: argument-processor header
  * Oliver Dixon. */
 
-#ifndef _ARGS_H
-#define _ARGS_H
+#ifndef ARGS_H
+#define ARGS_H
 
 #include <stdint.h>
 
@@ -58,5 +58,5 @@ typedef uint16_t opts_t;
 extern opts_t  options;
 int process_args ( int, char **, int * );
 
-#endif /* _ARGS_H */
+#endif /* ARGS_H */
 

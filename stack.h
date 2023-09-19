@@ -1,7 +1,7 @@
 /* owd-euses: stack function and data signatures */
 
-#ifndef _STACK_H
-#define _STACK_H
+#ifndef STACK_H
+#define STACK_H
 
 #include "euses.h"
 
@@ -16,5 +16,5 @@ void stack_push ( struct repo_stack_t *, struct repo_t * );
 void stack_init ( struct repo_stack_t * );
 void stack_cleanse ( struct repo_stack_t * );
 
-#endif /* _STACK_H */
+#endif /* STACK_H */
 
