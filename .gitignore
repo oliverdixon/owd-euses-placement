@@ -1,11 +1,22 @@
-nc/
-ebuild/
 .*
+ebuild/
 
-# Binaries
+# Program binaries
 
 a.out
 bin/
 *.o
-ash-euses
+owd-euses
+
+# LaTeX/Beamer temporary files
+
+presentation/presentation.pdf
+presentation/*.aux
+presentation/*.log
+presentation/*.out
+presentation/*.fdb_latexmk
+presentation/*.fls
+presentation/*.nav
+presentation/*.snm
+presentation/*.toc
 
