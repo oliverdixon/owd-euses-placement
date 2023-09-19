@@ -6,8 +6,8 @@
 #include "euses.h"
 
 struct repo_stack_t {
-        struct repo_t * lead;
-        unsigned long size;
+    struct repo_t * lead;
+    unsigned long size;
 };
 
 struct repo_t * stack_peek ( struct repo_stack_t * );
