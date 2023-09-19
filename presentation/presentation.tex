@@ -1,9 +1,14 @@
 % OWD 2023
+% Placement Interview Presentation for 'owd-euses'
 
 \documentclass{beamer}
 
+% BEGIN COMPANY INFORMATION
+
 \newcommand\companyname{Thales}
-\newcommand\programname{\emph{OWD-Euses}}
+\date{27th September, 2023} % Date of the placement interview
+
+% END COMPANY INFORMATION
 
 \usetheme{CambridgeUS}
 \setbeamertemplate{caption}[numbered]
@@ -11,14 +16,84 @@
 \beamerdefaultoverlayspecification{<+->}
 \titlegraphic{\includegraphics[width=.25\textwidth]{./gentoo-horizontal}}
 
-\title[Placement Interview Presentation]{Project Presentation: \programname}
+\hypersetup{
+    colorlinks,
+    allcolors=.,
+    urlcolor=gray,
+}
+
+\newcommand\programname{\texttt{owd-euses}}
+\title[Placement Interview Presentation]{The \programname\ Querying Tool}
+\author[Oliver Dixon]{
+    \texorpdfstring{Oliver Dixon \raisebox{.5pt}{%
+        \texttt{\footnotesize\href{mailto:Oliver Dixon <od641@york.ac.uk>}
+            {<od641@york.ac.uk>}}
+    }}{Oliver Dixon}}
+\institute[University of York]{Department of Computer Science, University of
+    York \and Department of Mathematics, University of York}
 \subtitle{\companyname\ Placement Interview Presentation}
-\author{Oliver Dixon}
-\institute[University of York]
-    {Department of Computer Science, University of York}
-\date{27th September, 2023}
 
 \begin{document}
 \frame{\titlepage}
+\section{Introduction, Motivation, and Project Specification}
+\begin{frame}
+    \frametitle{Overview of the Environment: Gentoo Linux}
+    \begin{itemize}
+        \item Gentoo Linux is a source-based distribution of the Linux operating
+            system; such distributions typically include package managers that
+            encourage, or mandate, the local compilation of most packages. This
+            stands in contrast to the previously established model of
+            downloading and installing pre-built binaries.
+        \item A source-based distribution model has a number of advantages for
+            power users, namely the ability to enable and disable compile-time
+            features as desired, resulting in a more compact and suitably
+            equipped binary.
+        \item With such extensive customisability, a powerful querying system is
+            required to determine the various features that are supported by
+            each of the available packages.
+    \end{itemize}
+\end{frame}
+\begin{frame}
+    \frametitle{Existing Solutions}
+    Due to the age and popularity of Gentoo Linux, a multitude of querying tools
+    exist for this purpose:
+    \pause
+
+    \begin{itemize}
+        \item \emph{eix}: very powerful and well-established, but requires
+            building and maintaining a binary cache of every installable
+            package.
+        \item \emph{euses}: one of the original cornerstones of the Gentoo
+            toolset, but contains bugs, error-prone and non-portable code, and
+            is incompatible with newer versions of Gentoo.
+        \item \emph{portageq}: the standard Gentoo querying tool; fully
+            compliant, but proves to be very non-performant on large software
+            repositories due to its antiquated Python foundations.
+    \end{itemize}
+\end{frame}
+\begin{frame}
+    \frametitle{Project Requirements}
+    \programname\ was devised in an effort to unify the advantages of these
+    existing solutions while eliminating the problems relating to safety,
+    incompatibility, and performance-preserving scalability. The final tool must
+    possess certain critical attributes:
+    \pause
+
+    \begin{enumerate}
+        \item be fully standards-compliant with the Gentoo \emph{Package Manager
+            Specification} and sufficiently customisable to work on future
+            revisions;
+        \item operate on existing (plain text) files in the established
+            directory structures, instead of generating and periodically
+            maintaining binary caches;
+        \item seamlessly scale on very large software repositories;
+        \item be \emph{correct}: undergoing rigorous unit-testing,
+            stress-testing under hostile environments, and never entering an
+            undefined or non-deterministic state.
+    \end{enumerate}
+\end{frame}
+\section{Technical Overview}
+\section{Deployment and Distribution}
+\section{Future Work}
 \end{document}
 
