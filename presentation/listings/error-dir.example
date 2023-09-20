@@ -1,0 +1,8 @@
+owd-euses: warning: -2(I): No queries were provided.
+owd-euses caught a fatal error and cannot continue.
+Re-run with "--help --version" or "-hv" for help.
+
+  Summary: "Could not use the repository-description base directory."
+  Offending Article: "/var/db/repos/gentoo/repos.conf/"
+  Error Detail: "No such file or directory"
+  Status Code: 2 (system errno)

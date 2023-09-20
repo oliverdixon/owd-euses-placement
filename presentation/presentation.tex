@@ -174,21 +174,51 @@
     \continuesource{stack.c}
 \end{frame}
 \begin{frame}
-    \frametitle{Abbreviated Source Preview: Argument Interface (1)}
+    \frametitle{Abridged Source Preview: Argument Interface (1)}
     \resetsrclines
     \continuesource{args.h}
 \end{frame}
 \begin{frame}
-    \frametitle{Abbreviated Source Preview: Argument Interface (2)}
+    \frametitle{Abridged Source Preview: Argument Interface (2)}
     \continuesource{args.h}
 \end{frame}
 \begin{frame}
-    \frametitle{Abbreviated Source Preview: Argument Interface (3)}
+    \frametitle{Abridged Source Preview: Argument Interface (3)}
     \continuesource{args.h}
 \end{frame}
 \begin{frame}
-    \frametitle{Abbreviated Source Preview: Argument Interface (4)}
+    \frametitle{Abridged Source Preview: Argument Interface (4)}
     \continuesource{args.h}
+\end{frame}
+\begin{frame}
+    \frametitle{Example Usage: List Repositories and Perform a Query}
+    Invocation: \texttt{owd-euses --repo-paths --verbose --list-repos qt5}
+    \par\vfill
+    \inputminted{text}{listings/qt.example}
+    \vfill\par
+    Equivalent Invocation with Short Arguments: \texttt{owd-euses -pvr qt5}
+\end{frame}
+\begin{frame}
+    \frametitle{Example Usage: Multiple Global Queries with Identification over
+        a Nonstandard Directory Structure}
+    Invocation: \texttt{PORTAGE\_CONFIGROOT=/etc/portage owd-euses --global
+    --repo-names --no-case --print-needles tls ssl vpn}
+    \par\vfill
+    \inputminted{text}{listings/tls.example}
+    \vfill\par
+    Equivalent Invocation with Short Arguments:
+    \texttt{PORTAGE\_CONFIGROOT=/etc/portage owd-euses -gnce tls ssl vpn}
+\end{frame}
+\begin{frame}
+    \frametitle{Example Usage: Informative Error-Handling}
+    Invocation: \texttt{PORTAGE\_CONFIGROOT=/var/db/repos/gentoo owd-euses}
+    \par Problem: The given directory structure is non-conforming.
+    \par\vfill\inputminted{text}{listings/error-dir.example}
+
+    \vfill
+    Invocation: \texttt{owd-euses -gk qt5}
+    \par Problem: The search-space specification is contradictory.
+    \par\vfill\inputminted{text}{listings/error-args.example}
 \end{frame}
 \section{Deployment and Distribution}
 % \section{Future Work}

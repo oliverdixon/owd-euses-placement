@@ -1,0 +1,7 @@
+owd-euses caught a fatal error and cannot continue.
+Re-run with "--help --version" or "-hv" for help.
+
+  Summary: "Inadequate command-line arguments were provided."
+  Offending Article: "N/A"
+  Error Detail: "The global and package options cannot be set simultaneously."
+  Status Code: -8 (internal)

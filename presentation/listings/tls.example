@@ -1,0 +1,14 @@
+(tls) gentoo::gnutls - Prefer net-libs/gnutls as SSL/TLS provider (ineffective with USE=-ssl)
+(ssl) gentoo::flac - Add support for FLAC: Free Lossless Audio Codec
+(ssl) gentoo::gnutls - Prefer net-libs/gnutls as SSL/TLS provider (ineffective with USE=-ssl)
+(tls) gentoo::ssl - Add support for SSL/TLS connections (Secure Socket Layer / Transport Layer Security)
+(ssl) gentoo::ssl - Add support for SSL/TLS connections (Secure Socket Layer / Transport Layer Security)
+(tls) gentoo::tls - mod_tls TLS module for Apache, intended to replace mod_ssl
+(ssl) gentoo::tls - mod_tls TLS module for Apache, intended to replace mod_ssl
+(vpn) gentoo::openvpn - Build the openvpn input plugin (reads the status file printed by OpenVPN)
+(tls) gentoo::tls - Provide TLS using mbed TLS (formerly known as PolarSSL) - Currently disabled.
+(ssl) gentoo::tls - Provide TLS using mbed TLS (formerly known as PolarSSL) - Currently disabled.
+(tls) gentoo::ssl_preread - This module allows extracting information from the ClientHello message without terminating SSL/TLS.
+(ssl) gentoo::ssl_preread - This module allows extracting information from the ClientHello message without terminating SSL/TLS.
+(ssl) gentoo::logfile - Enable logging to logfiles (requires USE=ssl)
+(ssl) gentoo::sslrouter - Permits routing/proxy of SSL requests

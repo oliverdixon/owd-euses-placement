@@ -1,0 +1,23 @@
+This is owd-euses, v. placement by Oliver Dixon (MMXX & MMXXIII). For support,
+send e-mail to Oliver Dixon <od641@york.ac.uk>.
+
+The source code repository and tarballs are available on-line at
+https://github.com/oliverdixon/owd-euses-placement. The code is licensed under
+the MIT Licence, the details of which can be found at https://mit-license.org/.
+
+Configuration directory: /etc/portage/repos.conf/
+
+Name: haskell   	Location: /var/db/repos/haskell
+Name: gentoo    	Location: /var/db/repos/gentoo
+Name: slonko    	Location: /var/db/repos/slonko
+Name: pf4public 	Location: /var/lib/layman/pf4public
+
+/var/db/repos/gentoo::gentoo::qt5 - Add support for the Qt 5 application and UI framework
+/var/db/repos/gentoo::gentoo::dev-libs/quazip:qt5 - Build with Qt5 support
+/var/db/repos/gentoo::gentoo::dev-python/QtPy:pyqt5 - Use dev-python/PyQt5 as Qt for Python implementation
+/var/db/repos/gentoo::gentoo::dev-python/pyudev:qt5 - Install PyQt5 bindings
+/var/db/repos/gentoo::gentoo::games-simulation/flightgear:qt5 - Build Qt5 launcher application
+/var/db/repos/gentoo::gentoo::media-gfx/renderdoc:qt5 - Build and install the qrenderdoc GUI
+/var/db/repos/gentoo::gentoo::media-libs/openimageio:qt5 - Build iv with Qt5
+/var/db/repos/gentoo::gentoo::media-libs/osl:qt5 - Build the osltoy binary
+/var/db/repos/gentoo::gentoo::media-video/guvcview:qt5 - Build with Qt5 interface instead Gtk+
