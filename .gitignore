@@ -19,4 +19,7 @@ presentation/*.fls
 presentation/*.nav
 presentation/*.snm
 presentation/*.toc
+presentation/_minted-presentation
+
+presentation/listings/Doxyfile
 

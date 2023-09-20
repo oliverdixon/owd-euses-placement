@@ -10,11 +10,36 @@
 
 % END COMPANY INFORMATION
 
+\usepackage{minted, calc}
+
 \usetheme{CambridgeUS}
 \setbeamertemplate{caption}[numbered]
 \numberwithin{figure}{section}
 \beamerdefaultoverlayspecification{<+->}
 \titlegraphic{\includegraphics[width=.25\textwidth]{./gentoo-horizontal}}
+\newcommand\chext{.{\fontfamily{cmr}\{}c,h{\fontfamily{cmr}\}}}
+
+\newcounter{firstsrcline}
+\newcounter{lastsrcline}
+\newcommand\srclinelimit{29}
+\newcommand\resetsrclines{%
+    \setcounter{firstsrcline}{1}
+    \setcounter{lastsrcline}{\thefirstsrcline+\srclinelimit}
+}
+\newcommand\continuesource[1]{%
+    \inputminted[firstline=\thefirstsrcline, lastline=\thelastsrcline,
+        firstnumber=\thefirstsrcline]{c}{listings/#1}
+    \setcounter{firstsrcline}{\thelastsrcline+1}
+    \setcounter{lastsrcline}{\thefirstsrcline+\srclinelimit}
+}
+\renewcommand\theFancyVerbLine{\color{gray}\slshape\arabic{FancyVerbLine}}
+\setminted{
+    fontsize=\tiny,
+    style=vs,
+    linenos,
+    numbersep=8pt,
+    xleftmargin=12pt,
+}
 
 \hypersetup{
     colorlinks,
@@ -61,8 +86,8 @@
 
     \begin{itemize}
         \item \emph{eix}: very powerful and well-established, but requires
-            building and maintaining a binary cache of every installable
-            package.
+            building and maintaining a centralised binary cache of every
+            installable package.
         \item \emph{euses}: one of the original cornerstones of the Gentoo
             toolset, but contains bugs, error-prone and non-portable code, and
             is incompatible with newer versions of Gentoo.
@@ -81,7 +106,7 @@
 
     \begin{enumerate}
         \item be fully standards-compliant with the Gentoo \emph{Package Manager
-            Specification} and sufficiently customisable to work on future
+            Specification} (PMS) and sufficiently customisable to work on future
             revisions;
         \item operate on existing (plain text) files in the established
             directory structures, instead of generating and periodically
@@ -93,7 +118,58 @@
     \end{enumerate}
 \end{frame}
 \section{Technical Overview}
+\begin{frame}
+    \frametitle{Details of the Implementation and Source Structure}
+    Written in C99, \programname\ was intended to run on POSIX-compliant
+    Gentoo/PMS-conforming UNIX-like systems. Given the four major design
+    principles, the codebase is very compact, currently standing at slightly
+    over 2000 lines. The source is clearly sectioned into distinct functions and
+    well-abstracted with regard to near-complete separation of code and data.
+    \pause
+
+    \begin{center}
+        \begin{tabular}{ll}
+            \hline
+            \textbf{Translation Unit(s)} & \textbf{Purpose} \\
+            \hline
+            \texttt{euses\chext} & Provide the core parsing and searching
+                routines \\
+            \texttt{globbing\chext} & Utilise POSIX regex support \\
+            \texttt{args\chext} & Parse and manage command-line arguments \\
+            \texttt{stack\chext} & Implement the standard stack ADT \\
+            \texttt{converse\chext} & Manage status- and error-reporting \\
+            \texttt{colour.h} & Provide helpers for ANSI text-colouring \\
+            \hline
+        \end{tabular}
+    \end{center}
+\end{frame}
+\begin{frame}
+    \frametitle{Source Preview: Stack Interface (1)}
+    \resetsrclines
+    \continuesource{stack.h}
+\end{frame}
+\begin{frame}
+    \frametitle{Source Preview: Stack Interface (2)}
+    \continuesource{stack.h}
+\end{frame}
+\begin{frame}
+    \frametitle{Source Preview: Stack Implementation (1)}
+    \resetsrclines
+    \continuesource{stack.c}
+\end{frame}
+\begin{frame}
+    \frametitle{Source Preview: Stack Implementation (2)}
+    \continuesource{stack.c}
+\end{frame}
+\begin{frame}
+    \frametitle{Source Preview: Stack Implementation (3)}
+    \continuesource{stack.c}
+\end{frame}
 \section{Deployment and Distribution}
 \section{Future Work}
+\section{Questions}
+\begin{frame}
+    \frametitle{Any questions?}
+\end{frame}
 \end{document}
 
