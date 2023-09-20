@@ -23,6 +23,10 @@
 \titlegraphic{\includegraphics[width=.25\textwidth]{./gentoo-horizontal}}
 \newcommand\chext{.{\fontfamily{cmr}\{}c,h{\fontfamily{cmr}\}}}
 
+% Note to self: is there a nicer way to do this without an excessive amount of
+% work? There doesn't seem to be any immediately obvious way of knowing how many
+% slides are required for any given source code file. Perhaps minted exposes
+% some tests in a publicly accessible interface?
 \newcounter{firstsrcline}
 \newcounter{lastsrcline}
 \newcommand\srclinelimit{29}
@@ -172,6 +176,19 @@
 \begin{frame}
     \frametitle{Abbreviated Source Preview: Argument Interface (1)}
     \resetsrclines
+    \continuesource{args.h}
+\end{frame}
+\begin{frame}
+    \frametitle{Abbreviated Source Preview: Argument Interface (2)}
+    \continuesource{args.h}
+\end{frame}
+\begin{frame}
+    \frametitle{Abbreviated Source Preview: Argument Interface (3)}
+    \continuesource{args.h}
+\end{frame}
+\begin{frame}
+    \frametitle{Abbreviated Source Preview: Argument Interface (4)}
+    \continuesource{args.h}
 \end{frame}
 \section{Deployment and Distribution}
 % \section{Future Work}
