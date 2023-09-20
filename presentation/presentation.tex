@@ -10,18 +10,21 @@
 % BEGIN COMPANY INFORMATION
 
 \newcommand\companyname{Thales}
-\date{27th September, 2023} % Date of the placement interview
+\date{27th September 2023} % Date of the placement interview
 
 % END COMPANY INFORMATION
 
-\usepackage{minted, calc}
+\usepackage{minted, calc, caption}
 
 \usetheme{CambridgeUS}
 \setbeamertemplate{caption}[numbered]
 \numberwithin{figure}{section}
 \beamerdefaultoverlayspecification{<+->}
 \titlegraphic{\includegraphics[width=.25\textwidth]{./gentoo-horizontal}}
+
 \newcommand\chext{.{\fontfamily{cmr}\{}c,h{\fontfamily{cmr}\}}}
+\newcommand\printmanpage[1]{\fbox{%
+    \includegraphics[page=#1, width=.3\linewidth]{listings/manual.pdf}}}
 
 % Note to self: is there a nicer way to do this without an excessive amount of
 % work? There doesn't seem to be any immediately obvious way of knowing how many
@@ -55,7 +58,7 @@
     urlcolor=gray,
 }
 
-\newcommand\programname{\texttt{owd-euses}}
+\newcommand\programname{\raisebox{.5pt}{\ttfamily owd-euses}}
 \title[Placement Interview Presentation]{The \programname\ Querying Tool}
 \author[Oliver Dixon]{
     \texorpdfstring{Oliver Dixon \raisebox{.5pt}{%
@@ -191,6 +194,11 @@
     \continuesource{args.h}
 \end{frame}
 \begin{frame}
+    \frametitle{Source Preview: Two-Way Heuristic Searching Driver}
+    \resetsrclines
+    \continuesource{twoway.c}
+\end{frame}
+\begin{frame}
     \frametitle{Example Usage: List Repositories and Perform a Query}
     Invocation: \texttt{owd-euses --repo-paths --verbose --list-repos qt5}
     \par\vfill
@@ -202,7 +210,7 @@
     \frametitle{Example Usage: Multiple Global Queries with Identification over
         a Nonstandard Directory Structure}
     Invocation: \texttt{PORTAGE\_CONFIGROOT=/etc/portage owd-euses --global
-    --repo-names --no-case --print-needles tls ssl vpn}
+        --repo-names --no-case --print-needles tls ssl vpn}
     \par\vfill
     \inputminted{text}{listings/tls.example}
     \vfill\par
@@ -220,7 +228,28 @@
     \par Problem: The search-space specification is contradictory.
     \par\vfill\inputminted{text}{listings/error-args.example}
 \end{frame}
-\section{Deployment and Distribution}
+\section{Release and Reception}
+\begin{frame}
+    \frametitle{Packaging, Distribution, and Maintenance}
+    \programname\ was exceptionally well-received by the community, and
+    undoubtedly achieved its ambitions.
+    \pause
+
+    \begin{itemize}
+        \item The package was shipped with makefiles and Portage-compatible
+            installation scripts (\emph{ebuilds}); this allowed for easy
+            adoption by the wider Gentoo community.
+        \item After first being advertised on the Gentoo developers' mailing
+            list, \programname\ was added to the official software repository,
+            being mirrored by hundreds of servers throughout the world.
+        \item The consistently rigorous Doxygen documentation combined with the
+            \texttt{roff}-compatible manual page guarantees a pleasant
+            experience for developers and end-users.
+        \item A central toolkit for similar tasks has since been released by the
+            central Gentoo Infrastructure Team, but \programname\ remains in use
+            to a lesser extent.
+    \end{itemize}
+\end{frame}
 % \section{Future Work}
 %
 % Note to self: keep this out of the presentation; the interviewers will likely
@@ -231,6 +260,14 @@
 \section{Questions}
 \begin{frame}
     \frametitle{Any questions?}
+    \begin{figure}[h!]
+        \centering
+        \printmanpage{1}
+        \printmanpage{2}
+        \printmanpage{3}
+        \vspace{.5em}
+        \caption*{\slshape The \programname\ Manual Page}
+    \end{figure}
 \end{frame}
 \end{document}
 
