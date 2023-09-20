@@ -35,10 +35,10 @@
  *    containing package-local flags. */
 
 enum arg_positions_t {
-    ARG_UNKNOWN      =    0,
+    ARG_UNKNOWN          =    0,
     ARG_PRINT_REPO_NAMES =    1,
     ARG_PRINT_REPO_PATHS =    2,
-    ARG_SHOW_HELP    =    4,
+    ARG_SHOW_HELP        =    4,
     ARG_SHOW_VERSION     =    8,
     ARG_LIST_REPOS       =   16,
     ARG_SEARCH_STRICT    =   32,
@@ -48,8 +48,8 @@ enum arg_positions_t {
     ARG_PRINT_NEEDLE     =  512,
     ARG_NO_MIDBUF_WARN   = 1024,
     ARG_PKG_FILES_ONLY   = 2048,
-    ARG_NO_COLOUR    = 4096,
-    ARG_GLOBAL_ONLY      = 8192  /* 14th bit */
+    ARG_NO_COLOUR        = 4096,
+    ARG_GLOBAL_ONLY      = 8192
 };
 
 /* uintN_t, such that log2(<highest `arg_position_t`>) <= N */
