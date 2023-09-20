@@ -1,5 +1,6 @@
 .*
 ebuild/
+!presentation/gentoo-horizontal.pdf
 
 # Program binaries
 
@@ -22,6 +23,9 @@ presentation/*.snm
 presentation/*.toc
 presentation/_minted-presentation
 
+# Doxygen output and default testing configuration
+
 presentation/listings/Doxyfile
-!presentation/gentoo-horizontal.pdf
+presentation/listings/html
+presentation/listings/latex
 
