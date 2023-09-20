@@ -10,7 +10,8 @@ owd-euses
 
 # LaTeX/Beamer temporary files
 
-presentation/presentation.pdf
+presentation/*/*.pdf
+presentation/*.pdf
 presentation/*.aux
 presentation/*.log
 presentation/*.out
@@ -22,4 +23,5 @@ presentation/*.toc
 presentation/_minted-presentation
 
 presentation/listings/Doxyfile
+!presentation/gentoo-horizontal.pdf
 

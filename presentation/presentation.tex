@@ -1,5 +1,9 @@
 % OWD 2023
 % Placement Interview Presentation for 'owd-euses'
+%
+% To generate the man page PDF in the listings/ directory:
+%   $ man -t manual.1 > manual.ps
+%   $ ps2pdf manual.ps
 
 \documentclass{beamer}
 
@@ -165,8 +169,17 @@
     \frametitle{Source Preview: Stack Implementation (3)}
     \continuesource{stack.c}
 \end{frame}
+\begin{frame}
+    \frametitle{Usage Preview: Basic Search}
+\end{frame}
 \section{Deployment and Distribution}
-\section{Future Work}
+% \section{Future Work}
+%
+% Note to self: keep this out of the presentation; the interviewers will likely
+% ask follow-up questions regarding potential improvements. Such questions can
+% be easily answered: add regex support for match queries, add wide character
+% support, threading the search algorithms, optimising for shorter needle
+% lengths, etc.
 \section{Questions}
 \begin{frame}
     \frametitle{Any questions?}
