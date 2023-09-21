@@ -27,7 +27,7 @@
 
 % END COMPANY INFORMATION
 
-\usepackage{minted, calc, caption, tikz}
+\usepackage{minted, calc, tikz}
 
 \usetheme{CambridgeUS}
 \setbeamertemplate{caption}[numbered]
@@ -35,16 +35,21 @@
 \beamerdefaultoverlayspecification{<+->}
 \titlegraphic{\includegraphics[width=.25\textwidth]{./gentoo-horizontal}}
 
-\usetikzlibrary{fadings}
+\usetikzlibrary{fadings, positioning, backgrounds}
 \tikzfading[
     name=fade right,
     left color=transparent!0,
     right color=transparent!100,
 ]
+\tikzfading[
+    name=fade down,
+    top color=transparent!100,
+    bottom color=transparent!0,
+]
 
 \newcommand\chext{.{\fontfamily{cmr}\{}c,h{\fontfamily{cmr}\}}}
-\newcommand\printmanpage[1]{\fbox{%
-    \includegraphics[page=#1, width=.3\linewidth]{manual}}}
+\newcommand\printmanpage[1]{\includegraphics[page=#1, width=.3\linewidth]
+    {manual}}
 
 % Note to self: is there a nicer way to do this without an excessive amount of
 % work? There doesn't seem to be any immediately obvious way of knowing how many
@@ -294,14 +299,22 @@
 \section{Questions}
 \begin{frame}
     \frametitle{Any Questions?}
-    \begin{figure}[h!]
-        \centering
-        \printmanpage{1}
-        \printmanpage{2}
-        \printmanpage{3}
-        \vspace{.5em}
-        \caption*{\slshape The \programname\ Manual Page}
-    \end{figure}
+    \centering
+    \begin{tikzpicture}[overlay, remember picture,
+            every node/.append style={draw=black, thin}]
+        \node[anchor=south, fill=white] (midpage) at (0, -\paperheight+110pt){
+            \printmanpage{2}};
+        \begin{scope}[on background layer]
+            \node[left=-1.5cm of midpage, rotate=25]{\printmanpage{1}};
+            \node[right=-1.5cm of midpage, rotate=-25]{\printmanpage{3}};
+        \end{scope}
+        \foreach \endpos in {current page.south east, current page.south west}{
+            \fill[white, path fading=fade down] (midpage.north) rectangle
+                (\endpos);
+        }
+        \node[above=.7cm of current page.south, fill=white]
+            {\large\slshape The \programname\ Manual Page};
+    \end{tikzpicture}
 \end{frame}
 \end{document}
 
