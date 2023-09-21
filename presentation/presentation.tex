@@ -1,7 +1,20 @@
 % OWD 2023
 % Placement Interview Presentation for 'owd-euses'
 %
-% To generate the man page PDF in the listings/ directory:
+% Dependencies of this file, relative to the presentation/ directory:
+%   gentoo-horizontal.pdf
+%   listings/stack.h
+%   listings/stack.c
+%   listings/args.h
+%   listings/twoway.c
+%   twoway-cover.pdf (see twoway-cover-get.sh)
+%   listings/qt.example
+%   listings/tls.example
+%   listings/error-dir.example
+%   listings/error-args.example
+%   manual.pdf (see manual.1)
+%
+% To generate the man page PDF:
 %   $ man -t ./manual.1 > manual.ps
 %   $ ps2pdf manual.ps
 
@@ -31,7 +44,7 @@
 
 \newcommand\chext{.{\fontfamily{cmr}\{}c,h{\fontfamily{cmr}\}}}
 \newcommand\printmanpage[1]{\fbox{%
-    \includegraphics[page=#1, width=.3\linewidth]{listings/manual.pdf}}}
+    \includegraphics[page=#1, width=.3\linewidth]{manual}}}
 
 % Note to self: is there a nicer way to do this without an excessive amount of
 % work? There doesn't seem to be any immediately obvious way of knowing how many
@@ -280,7 +293,7 @@
 % lengths, etc.
 \section{Questions}
 \begin{frame}
-    \frametitle{Any questions?}
+    \frametitle{Any Questions?}
     \begin{figure}[h!]
         \centering
         \printmanpage{1}
