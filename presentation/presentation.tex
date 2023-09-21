@@ -2,7 +2,7 @@
 % Placement Interview Presentation for 'owd-euses'
 %
 % To generate the man page PDF in the listings/ directory:
-%   $ man -t manual.1 > manual.ps
+%   $ man -t ./manual.1 > manual.ps
 %   $ ps2pdf manual.ps
 
 \documentclass{beamer}
@@ -14,13 +14,20 @@
 
 % END COMPANY INFORMATION
 
-\usepackage{minted, calc, caption}
+\usepackage{minted, calc, caption, tikz}
 
 \usetheme{CambridgeUS}
 \setbeamertemplate{caption}[numbered]
 \numberwithin{figure}{section}
 \beamerdefaultoverlayspecification{<+->}
 \titlegraphic{\includegraphics[width=.25\textwidth]{./gentoo-horizontal}}
+
+\usetikzlibrary{fadings}
+\tikzfading[
+    name=fade right,
+    left color=transparent!0,
+    right color=transparent!100,
+]
 
 \newcommand\chext{.{\fontfamily{cmr}\{}c,h{\fontfamily{cmr}\}}}
 \newcommand\printmanpage[1]{\fbox{%
@@ -58,7 +65,8 @@
     urlcolor=gray,
 }
 
-\newcommand\programname{\raisebox{.5pt}{\ttfamily owd-euses}}
+\newcommand\programname{%
+    \texorpdfstring{\raisebox{.5pt}{\ttfamily owd-euses}}{'owd-euses'}}
 \title[Placement Interview Presentation]{The \programname\ Querying Tool}
 \author[Oliver Dixon]{
     \texorpdfstring{Oliver Dixon \raisebox{.5pt}{%
@@ -195,6 +203,18 @@
 \end{frame}
 \begin{frame}
     \frametitle{Source Preview: Two-Way Heuristic Searching Driver}
+    \nointerlineskip
+    \begin{tikzpicture}[overlay]
+        % These are just some magic numbers to compensate for the large margins
+        % on the original paper scan. The gradient should start at the left side
+        % of the text body, and end at the right.
+        \node[anchor=north] (cover) at (\paperwidth-25pt, \headheight-10pt){
+            \includegraphics[height=.75\paperheight,
+                trim=120pt 200pt 120pt 70pt, clip]{twoway-cover}
+        };
+        \fill[white, path fading=fade right] (cover.north west) rectangle
+            (cover.south east);
+    \end{tikzpicture}
     \resetsrclines
     \continuesource{twoway.c}
 \end{frame}
@@ -210,7 +230,7 @@
     \frametitle{Example Usage: Multiple Global Queries with Identification over
         a Nonstandard Directory Structure}
     Invocation: \texttt{PORTAGE\_CONFIGROOT=/etc/portage owd-euses --global
-        --repo-names --no-case --print-needles tls ssl vpn}
+        \hspace*{1em} --repo-names --no-case --print-needles tls ssl vpn}
     \par\vfill
     \inputminted{text}{listings/tls.example}
     \vfill\par
@@ -224,6 +244,7 @@
     \par\vfill\inputminted{text}{listings/error-dir.example}
 
     \vfill
+    \pause
     Invocation: \texttt{owd-euses -gk qt5}
     \par Problem: The search-space specification is contradictory.
     \par\vfill\inputminted{text}{listings/error-args.example}
