@@ -12,3 +12,10 @@ throughout September and October 2023; many companies recommend that applicants
 arrive to interviews equipped with some expository independent work to
 substantiate their oft-fanciful claims of engineering grandeur.
 
+**NOTE:** My development standards have improved significantly since authoring
+the original program. I certainly would not consider the code contained within
+the [original directory](original/) to stand at an acceptable level of quality.
+Therefore, a small portion of the code has been modified (principally regarding
+the level of abstraction) for the purposes of presentation; the revised files
+can be found at [presentation/listings](presentation/listings/).
+
