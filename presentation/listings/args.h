@@ -104,6 +104,7 @@ const char * arg_strerror ( enum arg_stat status );
  * @param [in] argc the number of arguments provided in the argument vector
  * @param [in] argv the text argument vector, typically from the shell
  * @param [out] bitstring the argument-processor switch output
+ * @return the status of the argument-processor
  */
 enum arg_stat arg_parse ( int argc, char ** argv, args_t * bitstring );
 
