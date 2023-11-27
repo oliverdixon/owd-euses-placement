@@ -12,6 +12,8 @@ throughout September and October 2023; many companies recommend that applicants
 arrive to interviews equipped with some expository independent work to
 substantiate their oft-fanciful claims of engineering grandeur.
 
+Live presentation practice video: <https://www.youtube.com/watch?v=YbU-YKbr7lc>
+
 **NOTE:** My development standards have improved significantly since authoring
 the original program. I certainly would not consider the code contained within
 the [original directory](original/) to stand at an acceptable level of quality.
